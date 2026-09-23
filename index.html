@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>保卫羊村 · 布阵工具</title>
+<style>
+  :root{
+    --bg:#12181c; --panel:#1b2429; --panel2:#232f35; --line:#33434b;
+    --text:#e6eef2; --dim:#94a7b0; --accent:#5cc9a7; --warn:#e0603c;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--text); font:13px/1.5 "Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  header{display:flex; align-items:center; gap:10px; padding:8px 14px;
+    background:var(--panel); border-bottom:1px solid var(--line); flex:0 0 auto}
+  header h1{font-size:15px; margin:0 8px 0 0; font-weight:600; letter-spacing:.5px; white-space:nowrap}
+  header h1 span{color:var(--accent)}
+  .spacer{flex:1 1 auto}
+  select,input,button,textarea{font:inherit; color:var(--text); background:var(--panel2);
+    border:1px solid var(--line); border-radius:6px; padding:5px 8px; outline:none}
+  button{cursor:pointer}
+  button:hover{border-color:#4d6470}
+  button.on{background:var(--accent); color:#0d1417; border-color:var(--accent); font-weight:600}
+  button.ghost{background:transparent}
+  main{flex:1 1 auto; display:flex; min-height:0}
+  aside{width:256px; flex:0 0 auto; background:var(--panel); overflow:auto; padding:10px 12px 40px}
+  aside.left{border-right:1px solid var(--line)}
+  aside.right{border-left:1px solid var(--line); width:300px}
+  #stage{flex:1 1 auto; position:relative; overflow:auto; background:
+    radial-gradient(circle at 30% 20%, #1a2228, #0d1215 70%)}
+  canvas{display:block; margin:0 auto}
+  h2{font-size:12px; color:var(--dim); font-weight:600; margin:16px 0 6px; letter-spacing:1px}
+  h2:first-child{margin-top:2px}
+  .row{display:flex; flex-wrap:wrap; gap:5px}
+  .chip{border:1px solid var(--line); background:var(--panel2); border-radius:6px;
+    padding:4px 7px; cursor:pointer; font-size:12px; line-height:1.2}
+  .chip.on{background:var(--accent); color:#0d1417; border-color:var(--accent); font-weight:600}
+  .chip.off{opacity:.35; cursor:not-allowed}
+  .chip.gem{border-radius:20px; padding:4px 9px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:1px}
+  .info{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-top:8px}
+  .kv{display:flex; justify-content:space-between; gap:8px; padding:1px 0}
+  .kv b{font-weight:600; color:#fff}
+  .total{font-size:19px; font-weight:700; color:var(--accent)}
+  .note{color:var(--dim); font-size:12px}
+  .warn{color:var(--warn)}
+  .ok{color:var(--accent)}
+  .list{max-height:230px; overflow:auto; border:1px solid var(--line); border-radius:8px; margin-top:6px}
+  .item{display:flex; justify-content:space-between; gap:6px; padding:4px 8px; cursor:pointer; border-bottom:1px solid #263238}
+  .item:last-child{border-bottom:0}
+  .item:hover{background:#263238}
+  .item.sel{background:#2d4a44}
+  .item .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .legend{display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; font-size:12px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px;border:1px solid #0006}
+  .hint{position:absolute;left:12px;bottom:10px;color:var(--dim);font-size:12px;
+    background:#0d1215cc;padding:4px 8px;border-radius:6px;border:1px solid var(--line)}
+  .slider{display:flex;align-items:center;gap:6px}
+  .slider input[type=range]{flex:1 1 auto;padding:0}
+  textarea{width:100%;height:70px;font-family:Consolas,monospace;font-size:12px;resize:vertical}
+  #lightbox{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:99}
+  #lightbox.on{display:flex}
+  #lightbox img{max-width:94vw;max-height:94vh}
+  .tag{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 3px;margin-left:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>保卫羊村 · <span>布阵工具</span></h1>
+  <span class="note" id="mapMeta"></span>
+  <span class="spacer"></span>
+  <button id="btnHelp" class="ghost">使用说明</button>
+  <button id="btnUndo" class="ghost">撤销</button>
+  <button id="btnClear" class="ghost">清空本图</button>
+</header>
+
+<main>
+  <aside class="left">
+    <h2>地图</h2>
+    <div class="row" id="chapterTabs"></div>
+    <div class="row" id="mapList" style="margin-top:6px;max-height:168px;overflow:auto"></div>
+    <div class="note" id="mapBrief" style="margin-top:5px"></div>
+
+    <h2>图例 · 地图说明</h2>
+    <div class="note" style="margin-bottom:4px">鼠标划过格子会显示该格的具体类型与标注。</div>
+    <div class="legend" id="legend"></div>
+    <div id="mapNotes" class="note" style="margin-top:6px"></div>
+
+    <h2>建塔</h2>
+    <div class="row" id="towerList"></div>
+
+    <h2>宝石</h2>
+    <div class="row" id="gemColorList"></div>
+    <div class="row" id="gemTierList" style="margin-top:5px"></div>
+
+    <h2>等级</h2>
+    <div class="slider">
+      <input type="range" id="lvRange" min="1" max="100" value="1">
+      <input type="number" id="lvNum" min="1" max="100" value="1" style="width:64px">
+    </div>
+    <div class="note" id="lvHint" style="margin-top:2px"></div>
+
+    <h2>特殊建筑</h2>
+    <div class="row" id="specList"></div>
+
+    <h2>当前选择</h2>
+    <div class="info" id="selInfo"></div>
+
+    <h2>鼠标工具</h2>
+    <div class="row" id="toolList">
+      <button class="chip tool on" data-tool="build">放置</button>
+      <button class="chip tool" data-tool="select">选择</button>
+      <button class="chip tool" data-tool="erase">擦除</button>
+      <button class="chip tool" data-tool="terrain">改地形</button>
+      <button class="chip tool" data-tool="align">底图对齐</button>
+    </div>
+    <div id="terrainBr" style="display:none;margin-top:6px" class="row"></div>
+
+    <h2>显示</h2>
+    <div class="row">
+      <button class="chip" id="tgBase">地图底图</button>
+      <button class="chip" id="tgPath">走狼路线</button>
+      <button class="chip" id="tgRange">攻击范围</button>
+      <button class="chip" id="tgGrid">格子编号</button>
+    </div>
+    <div class="slider" style="margin-top:8px">
+      <span class="note">范围透明度</span>
+      <input type="range" id="rangeAlpha" min="2" max="60" value="16">
+    </div>
+    <div class="slider" style="margin-top:4px">
+      <span class="note">画布缩放</span>
+      <input type="range" id="zoom" min="60" max="260" value="100">
+    </div>
+    <div id="alignBox" style="display:none">
+      <div class="slider" style="margin-top:6px">
+        <span class="note">底图X</span><input type="range" id="alX" min="-200" max="200" value="0">
+      </div>
+      <div class="slider">
+        <span class="note">底图Y</span><input type="range" id="alY" min="-200" max="200" value="0">
+      </div>
+      <div class="slider">
+        <span class="note">底图大小</span><input type="range" id="alS" min="40" max="300" value="100">
+      </div>
+      <div class="row" style="margin-top:4px">
+        <button class="chip" id="alReset">重置</button>
+      </div>
+      <div class="note" style="margin-top:4px">拖动底图对齐格子，滚轮缩放底图，会自动记住。</div>
+    </div>
+
+  </aside>
+
+  <section id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hint" id="hint"></div>
+  </section>
+
+  <aside class="right">
+    <h2>造价统计</h2>
+    <div class="info">
+      <div class="kv"><span>本图总造价</span><span class="total" id="sumTotal">0</span></div>
+      <div class="kv" id="incomeRow"><span>参考收入（图册标注）</span><b id="sumIncome">—</b></div>
+      <div id="sumRows" style="margin-top:6px"></div>
+      <div class="kv" id="expRow" style="margin-top:6px"><span>升级经验合计</span><b id="sumExp">0</b></div>
+      <div class="note" style="margin-top:6px">数据来源：羊村百科</div>
+    </div>
+
+    <div id="simSection">
+    <h2>模拟出狼 · 走狼预测</h2>
+    <div class="info">
+      <div id="wolfTags" class="row" style="gap:4px"></div>
+      <div class="slider" style="margin-top:8px">
+        <span class="note" style="width:52px">进度</span>
+        <input type="number" id="simScore" min="0" step="50" value="0" style="width:82px">
+        <span class="note" id="simScoreMax"></span>
+      </div>
+      <div class="slider" style="margin-top:4px">
+        <span class="note" style="width:52px">波难度</span>
+        <select id="simDiff" style="flex:1 1 auto"></select>
+      </div>
+      <div class="kv" style="margin-top:6px"><span>狼等级 L</span><b id="simLevel">—</b></div>
+      <div class="kv"><span>本图狼血量</span><span id="simHpList" class="note"></span></div>
+      <div class="row" style="margin-top:6px">
+        <button class="chip" id="btnWave">随机生成一波</button>
+        <button class="chip" id="btnWaveCopy">复制波</button>
+        <button class="chip" id="btnSim">模拟走狼</button>
+      </div>
+      <div id="waveResult" class="note" style="margin-top:6px"></div>
+      <div id="simResult" style="margin-top:8px"></div>
+    </div>
+    </div>
+
+    <h2>路线检查</h2>
+    <div class="info" id="pathInfo"></div>
+
+    <h2>已布置（<span id="cnt">0</span>）</h2>
+    <div class="list" id="bList"></div>
+    <div class="note" id="gemStats" style="margin-top:5px"></div>
+    <div class="row" style="margin-top:6px">
+      <button class="chip" id="btnDelSel">删除选中</button>
+      <button class="chip" id="btnUndo2">撤销</button>
+    </div>
+
+    <h2>分享 · 种子码</h2>
+    <textarea id="seedBox" placeholder="点「生成种子码」得到一串代码，发给别人；别人粘贴到框里点「载入种子码」即可得到同一张图同样的布阵。"></textarea>
+    <div class="row" style="margin-top:5px">
+      <button class="chip" id="btnSeedMake">生成种子码</button>
+      <button class="chip" id="btnSeedCopy">复制</button>
+      <button class="chip" id="btnSeedLoad">载入种子码</button>
+    </div>
+    <div class="note" id="seedHint" style="margin-top:4px"></div>
+
+  </aside>
+</main>
+
+<div id="lightbox"><img id="lightImg" alt=""></div>
+
+<script src="data.js"></script>
+<script>
+"use strict";
+const D = window.YC_DATA;
+const TYPE_NAME = D.typeName;
+const COLORS = {0:"#2f4a2a",1:"#cbb079",2:"#d0453c",3:"#3f74d0",4:"#a04fc8",5:"#c98a2c",6:"#8f6fd0",7:"#5fb0cc",8:"#7b8a91"};
+const TOWER_ORDER = D.towers.map(t=>t.name);
+const MAXLV = D.towerMax;
+const STORE_KEY = "yangcun-buzhen-v1";
+const CHAPTER_NAME = {1:"第一大图",2:"第二大图",3:"第三大图",4:"第四大图",0:"大本营防线"};
+const ARROWS = {"→":[0,1], "←":[0,-1], "↑":[-1,0], "↓":[1,0]};
+const GEM_COLORS = [0,1,3,2,5,4,6];      // 无、红、绿、黄、紫、蓝、黑
+const GEM_TIERS  = [1,2,3,4,5];
+const TIER_NAME  = {1:"碎片",2:"晶体",3:"宝石",4:"精华",5:"强化"};
+
+const state = {
+  mapIdx: 0,
+  chapter: 1,
+  sel: {kind:"tower", tower:"哨塔", gem:"none", level:1, spec:"盘龙柱"},
+  tool: "build",
+  brush: 1,
+  selBuilding: null,
+  showBase:false, showPath:false, showRange:false, showGrid:false,
+  zoom:1, rangeAlpha:0.22,
+  align:{x:0,y:0,s:100},
+  data: load(),
+};
+const undoStack = [];
+
+/* ================= 存档 ================= */
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {maps:{}};
+}
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(state.data)); }
+  catch(e){ setHint("浏览器本地存储不可用，请用种子码或导出存档保存进度"); }
+}
+function rec(map){
+  const m = map || cur();
+  if(!state.data.maps[m.name]) state.data.maps[m.name] = {layout:[], terrain:{}, align:{x:0,y:0,s:100}};
+  const r = state.data.maps[m.name];
+  if(!r.layout) r.layout=[];
+  if(!r.terrain) r.terrain={};
+  if(!r.align) r.align={x:0,y:0,s:100};
+  return r;
+}
+function cur(){ return D.maps[state.mapIdx]; }
+function layoutOf(m){
+  const r = state.data.maps[(m||cur()).name];
+  return (r && r.layout) || [];
+}
+function cellType(m,r,c){
+  const ov = rec(m).terrain[r+"_"+c];
+  if(ov !== undefined) return ov;
+  return +m.grid[r][c];
+}
+function buildingAt(r,c){
+  return rec().layout.find(b=>b.r===r&&b.c===c) || null;
+}
+function snapshot(){
+  undoStack.push(JSON.stringify(rec()));
+  if(undoStack.length>60) undoStack.shift();
+}
+function undo(){
+  if(!undoStack.length){ setHint("没有可撤销的操作"); return; }
+  state.data.maps[cur().name] = JSON.parse(undoStack.pop());
+  state.selBuilding = null;
+  save(); draw(); renderStats(); renderSpecs(); checkPath();
+}
+
+/* ================= 塔 / 宝石 数据 ================= */
+function gemById(id){ return D.gems.find(g=>g.id===id) || D.gems[0]; }
+
+function towerCost(name, level, section){
+  const tbl = section==="front" ? D.frontCost : D.defendCost;
+  const arr = tbl[name]; if(!arr) return 0;
+  return arr[Math.min(level,arr.length)-1] || 0;
+}
+/* 只有大本营防线用「防线塔造价、经验」那套（更贵）；其它图一律用普通造价 */
+function secOf(m){ return ((m||cur()).chapter === 0) ? "defend" : "front"; }
+function towerAtk(name, level, gemId){
+  if(name==="镶嵌塔"){
+    const x = gemById(gemId).xi;
+    return Math.round((x.a + x.b*level + x.c*level*level) * x.rate + x.add);
+  }
+  const arr = D.frontAtk[name];
+  return arr ? arr[Math.min(level,arr.length)-1] : null;
+}
+function towerRangeTiles(name, gemId){
+  const base = D.baseRange[name];
+  if(!base || base <= 0) return null;
+  const g = gemById(gemId);
+  const rate = (g.range && g.range[name]) || 1;
+  return base * rate / 1000;      // 配置里 1000 = 1 格
+}
+/* 射程形状：普通塔是圆（可能有近处盲区），波动塔是十字 */
+function rangeInfo(name, gemId){
+  const g = gemById(gemId);
+  const rate = (g.range && g.range[name]) || 1;
+  if(D.crossRange && D.crossRange[name]) return {type:"cross", arms: D.crossRange[name]*rate};
+  const base = D.baseRange[name];
+  if(!base || base <= 0) return null;
+  return {type:"circle", r: base*rate/1000, blind: ((g.rangeMin||{})[name] || 0)};
+}
+function towerExp(name, level, section){
+  if(section!=="defend") return 0;
+  const arr = D.defendExp[name]; if(!arr) return 0;
+  let s=0; for(let i=0;i<level-1 && i<arr.length;i++) s += arr[i]||0;
+  return s;
+}
+function specInfo(name){ return D.special.find(s=>s.name===name); }
+function specCost(name, section){
+  const s = specInfo(name); if(!s) return 0;
+  return (section==="front" ? s.front : (s.defend!=null? s.defend : s.front)) || 0;
+}
+function bCost(b, section){
+  return b.kind==="special" ? specCost(b.spec, section) : towerCost(b.tower, b.level, section);
+}
+function fmt(n){ return (n||0).toLocaleString("en-US"); }
+/* 缩写：黑碎片炮塔 → 炮：碎片，绿精华波动 → 波动：精华 …… */
+const SHORT_TOWER = {"哨塔":"哨", "散弹塔":"散", "炮塔":"炮", "波动塔":"波动", "镶嵌塔":"镶嵌"};
+function buildingLabel(b){
+  if(b.kind==="special") return b.spec;
+  const g = gemById(b.gem);
+  const tier = g.tier ? TIER_NAME[g.tier] : "无";
+  return (SHORT_TOWER[b.tower]||b.tower) + "：" + tier;
+}
+
+/* 雕像加成：上下左右各两格（不含雕像自己所在格） */
+function axisCells(r,c,dist){
+  const out=[];
+  for(let d=1; d<=dist; d++){
+    out.push([r-d,c],[r+d,c],[r,c-d],[r,c+d]);
+  }
+  return out;
+}
+function statueBuff(r,c){
+  let atk=1, range=1;
+  layoutOf().forEach(b=>{
+    if(b.kind!=="special") return;
+    if(b.spec!=="牛郎雕像" && b.spec!=="织女雕像") return;
+    if(!axisCells(b.r,b.c,2).some(([rr,cc])=>rr===r&&cc===c)) return;
+    if(b.spec==="牛郎雕像") atk = 1.2;
+    else range = 1.2;
+  });
+  return {atk, range};
+}
+
+/* ================= 画布 ================= */
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+let CELL = 44, PAD = 26, baseImg = null;
+
+function fitCanvas(){
+  const m = cur();
+  const stage = document.getElementById("stage");
+  const availW = stage.clientWidth - 24, availH = stage.clientHeight - 24;
+  const cell = Math.max(15, Math.min((availW-2*PAD)/m.cols, (availH-2*PAD)/m.rows, 64));
+  CELL = cell * state.zoom;
+  PAD = Math.round(18 * state.zoom);
+  const w = Math.ceil(m.cols*CELL + PAD*2), h = Math.ceil(m.rows*CELL + PAD*2);
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = w*dpr; cv.height = h*dpr;
+  cv.style.width = w+"px"; cv.style.height = h+"px";
+  cv.dataset.cell = CELL; cv.dataset.pad = PAD;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function cellCenter(r,c){ return [PAD + (c+.5)*CELL, PAD + (r+.5)*CELL]; }
+
+function draw(){
+  const m = cur(), R = rec(m);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = "#0f1518"; ctx.fillRect(0,0,cv.width,cv.height);
+
+  if(state.showBase && baseImg){
+    const w = m.cols*CELL * (state.align.s/100), h = m.rows*CELL * (state.align.s/100);
+    ctx.globalAlpha = .95;
+    ctx.drawImage(baseImg, PAD + state.align.x, PAD + state.align.y, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  const cellAlpha = state.showBase ? 0.42 : 1;
+  for(let r=0;r<m.rows;r++){
+    for(let c=0;c<m.cols;c++){
+      const t = cellType(m,r,c);
+      const x = PAD + c*CELL, y = PAD + r*CELL;
+      ctx.globalAlpha = cellAlpha;
+      ctx.fillStyle = COLORS[t] || "#555";
+      ctx.fillRect(x,y,CELL,CELL);
+      ctx.globalAlpha = Math.min(1, cellAlpha + 0.4);
+      ctx.strokeStyle = "#00000055"; ctx.lineWidth = 1;
+      ctx.strokeRect(x+.5,y+.5,CELL-1,CELL-1);
+      if(t===1){ ctx.fillStyle="#ffffff14"; ctx.fillRect(x,y,CELL,CELL); }
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  (m.edges||[]).forEach(e=>{
+    ctx.fillStyle = e.kind===2 ? COLORS[2] : COLORS[3];
+    const s = CELL*0.5;
+    let x,y;
+    if(e.side==="left"){ x = PAD - s; y = PAD + e.pos*CELL + (CELL-s)/2; }
+    else if(e.side==="right"){ x = PAD + m.cols*CELL; y = PAD + e.pos*CELL + (CELL-s)/2; }
+    else if(e.side==="top"){ x = PAD + e.pos*CELL + (CELL-s)/2; y = PAD - s; }
+    else { x = PAD + e.pos*CELL + (CELL-s)/2; y = PAD + m.rows*CELL; }
+    ctx.fillRect(x,y,s,s);
+  });
+
+  // 攻击范围（在建筑下面画）
+  if(state.showRange){
+    R.layout.forEach(b=>{
+      if(b.kind!=="tower") return;
+      const info = rangeInfo(b.tower, b.gem);
+      if(!info) return;
+      const buff = statueBuff(b.r,b.c);
+      const [cx,cy] = cellCenter(b.r,b.c);
+      const g = gemById(b.gem);
+      const fill = hexA(g.hex, state.rangeAlpha);
+      const line = hexA(g.hex, Math.min(1, state.rangeAlpha+0.4));
+      if(info.type==="circle"){
+        const r = info.r*buff.range, blind = info.blind||0;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r*CELL, 0, Math.PI*2);
+        if(blind>0) ctx.arc(cx, cy, blind*CELL, 0, Math.PI*2, true);
+        ctx.fillStyle = fill; ctx.fill("evenodd");
+        ctx.strokeStyle = line; ctx.lineWidth = 1.5;
+        ctx.setLineDash(buff.range>1 ? [6,5] : []);   // 虚线=被雕像加成
+        ctx.beginPath(); ctx.arc(cx, cy, r*CELL, 0, Math.PI*2); ctx.stroke();
+        ctx.setLineDash([]);
+        if(blind>0){   // 近处打不到，用虚线小圈标出来
+          ctx.setLineDash([4,4]);
+          ctx.beginPath(); ctx.arc(cx, cy, blind*CELL, 0, Math.PI*2); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }else if(info.type==="cross"){
+        const arms = info.arms*buff.range;
+        ctx.fillStyle = fill; ctx.strokeStyle = line; ctx.lineWidth = 1;
+        for(const [dr,dc] of DIRS){
+          for(let i=1;i<=Math.ceil(arms);i++){
+            const rr = b.r+dr*i, cc = b.c+dc*i;
+            if(blocksWave(m,rr,cc)) break;      // 被障碍或建筑挡住，后面就打不到了
+            const part = Math.min(1, arms-(i-1));
+            if(part<=0) continue;
+            const [px,py] = cellCenter(rr, cc);
+            const w = (dc!==0? part*CELL : CELL), h = (dr!==0? part*CELL : CELL);
+            const x = dc>0 ? px-CELL/2 : (dc<0 ? px-CELL/2+(1-part)*CELL : px-CELL/2);
+            const y = dr>0 ? py-CELL/2 : (dr<0 ? py-CELL/2+(1-part)*CELL : py-CELL/2);
+            ctx.fillRect(x, y, w, h);
+          }
+        }
+      }
+    });
+  }
+
+  // 最短路线
+  if(state.showPath){
+    ctx.strokeStyle = "#ffee58"; ctx.lineWidth = Math.max(2,CELL*0.12);
+    ctx.lineCap="round"; ctx.lineJoin="round";
+    shortestPaths().forEach(item=>{
+      pathSegments(item.path).forEach(seg=>{
+        ctx.beginPath();
+        seg.forEach(([r,c],i)=>{
+          const x = PAD + (c+.5)*CELL, y = PAD + (r+.5)*CELL;
+          i? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+        });
+        ctx.stroke();
+      });
+    });
+  }
+
+  R.layout.forEach(b=>{
+    const [x,y] = cellCenter(b.r,b.c);
+    const sel = state.selBuilding && state.selBuilding.r===b.r && state.selBuilding.c===b.c;
+    if(b.kind==="special"){
+      ctx.fillStyle = b.spec==="墙" ? "#8d7b6a" : "#d9a53f";
+      ctx.strokeStyle = sel? "#fff" : "#00000088"; ctx.lineWidth = sel?3:1.5;
+      const s = CELL*0.72;
+      ctx.beginPath(); ctx.rect(x-s/2,y-s/2,s,s); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#3a2a10"; ctx.font = Math.round(CELL*0.3)+"px sans-serif";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(b.spec.slice(0,2), x, y);
+    }else{
+      const g = gemById(b.gem);
+      ctx.beginPath(); ctx.arc(x,y,CELL*0.38,0,Math.PI*2);
+      ctx.fillStyle = g.hex; ctx.fill();
+      ctx.strokeStyle = sel? "#fff" : "#000000aa"; ctx.lineWidth = sel?3:1.5; ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.font = "bold "+Math.round(CELL*0.34)+"px sans-serif";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(String(b.level), x, y-CELL*0.05);
+      // 塔类型（上）与宝石档位（下）都画在塔身上，档位就是「宝石缩写」
+      ctx.fillStyle="#ffffffcc"; ctx.font = Math.round(CELL*0.2)+"px sans-serif";
+      ctx.fillText(b.tower.slice(0,1), x, y-CELL*0.24);
+      const tierTxt = g.tier ? TIER_NAME[g.tier] : "无";
+      ctx.font = "bold "+Math.round(CELL*0.21)+"px sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#00000099"; ctx.textBaseline="middle";
+      ctx.strokeText(tierTxt, x, y+CELL*0.22);
+      ctx.fillStyle = "#ffffff"; ctx.fillText(tierTxt, x, y+CELL*0.22);
+    }
+    if(state.showGrid){
+      ctx.fillStyle="#ffffffcc"; ctx.font=Math.round(CELL*0.22)+"px monospace";
+      ctx.textAlign="left"; ctx.textBaseline="top";
+      ctx.fillText(b.r+","+b.c, PAD+b.c*CELL+3, PAD+b.r*CELL+2);
+    }
+  });
+}
+function hexA(hex, a){
+  const h = (hex||"#888888").replace("#","");
+  const n = parseInt(h.length===3 ? h.split("").map(x=>x+x).join("") : h, 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+/* 波动塔的十字攻击会被障碍和建筑挡住 */
+function blocksWave(m,r,c){
+  if(r<0||c<0||r>=m.rows||c>=m.cols) return true;
+  const t = cellType(m,r,c);
+  if(t===0) return true;
+  if(t===3 && !isVillageIn(m,r,c)) return true;
+  if(buildingAt(r,c)) return true;
+  return false;
+}
+
+/* ================= 连通性 / 路线 ================= */
+const WALK_TYPES = new Set([1,4,5,7,8,2]);     // 狼可以站的格子（羊村格单独判断）
+const BUILD_TYPES = new Set([1,6,8]);          // 可以盖建筑的格子
+const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];      // 四方向，不走折线
+
+function isVillageIn(m,r,c){                   // 羊村里带标注的那格才是入村口
+  return cellType(m,r,c)===3 && !!(m.labels||{})[r+"_"+c];
+}
+function walkable(m,r,c,withBuildings){
+  if(r<0||c<0||r>=m.rows||c>=m.cols) return false;
+  const t = cellType(m,r,c);
+  if(t===3){ if(!isVillageIn(m,r,c)) return false; }   // 村子其它格=障碍，不算路线
+  else if(!WALK_TYPES.has(t)) return false;
+  if(withBuildings && buildingAt(r,c)) return false;
+  return true;
+}
+function arrowOf(text){
+  if(!text) return null;
+  for(const ch in ARROWS) if(text.indexOf(ch) >= 0) return ARROWS[ch];
+  return null;
+}
+function neighborsOf(m,r,c,withBuildings,out){
+  const t = cellType(m,r,c);
+  // 踩到「传送入」一定会被送走，不能再当普通格子走出去
+  if(t===4){
+    const gid = (m.tele||{})[r+"_"+c];
+    for(let rr=0;rr<m.rows;rr++) for(let cc=0;cc<m.cols;cc++){
+      if(cellType(m,rr,cc)!==5) continue;
+      if(gid != null && (m.tele||{})[rr+"_"+cc] !== gid) continue;
+      if(withBuildings && buildingAt(rr,cc)) continue;
+      out.push([rr,cc]);
+    }
+    return;
+  }
+  for(const [dr,dc] of DIRS){
+    if(walkable(m,r+dr,c+dc,withBuildings)) out.push([r+dr,c+dc]);
+  }
+}
+/* 出入口分组：
+   图册里每个出狼口都单独写了标注（沃夫沼泽一排 9 个），所以按“标注”分组；
+   羊村常画成连成一片的好几格、只写 1~2 个标注，未标注的格子就近并入相邻标注。 */
+function groupMarkers(m, cells){
+  const key = p=>p[0]+","+p[1];
+  const inComp = new Set(cells.map(key));
+  const pool = new Set(cells.map(key));
+  const groups = [];
+  cells.forEach(start=>{
+    if(!pool.has(key(start))) return;
+    pool.delete(key(start));
+    const comp=[start], q=[start];
+    while(q.length){
+      const [r,c] = q.pop();
+      for(const [dr,dc] of DIRS){
+        const k = (r+dr)+","+(c+dc);
+        if(pool.has(k)){ pool.delete(k); const p=[r+dr,c+dc]; comp.push(p); q.push(p); }
+      }
+    }
+    const owner = new Map();
+    const labeled = comp.filter(p=>m.labels[p[0]+"_"+p[1]]);
+    if(labeled.length<=1){ groups.push(comp); return; }
+    labeled.forEach(p=>owner.set(key(p), key(p)));
+    let frontier = labeled.slice();
+    while(frontier.length){
+      const next=[];
+      frontier.forEach(([r,c])=>{
+        const o = owner.get(key([r,c]));
+        for(const [dr,dc] of DIRS){
+          const p=[r+dr,c+dc], k=key(p);
+          if(inComp.has(k) && !owner.has(k)){ owner.set(k,o); next.push(p); }
+        }
+      });
+      frontier = next;
+    }
+    const byOwner = {};
+    comp.forEach(p=>{
+      const k = key(p);
+      const o = owner.get(k) || k;
+      (byOwner[o] = byOwner[o] || []).push(p);
+    });
+    Object.keys(byOwner).forEach(o=>groups.push(byOwner[o]));
+  });
+  return groups;
+}
+function entryGroups(m){
+  const ents=[], vils=[];
+  const edgeDir = {};
+  for(let r=0;r<m.rows;r++) for(let c=0;c<m.cols;c++){
+    const t = cellType(m,r,c);
+    if(t===2) ents.push([r,c]);
+    else if(t===3) vils.push([r,c]);
+  }
+  (m.edges||[]).forEach(e=>{
+    let r,c;
+    if(e.side==="left"||e.side==="right"){
+      r = e.pos; c = e.side==="left" ? 0 : m.cols-1;
+      if(!walkable(m,r,c,false)){
+        let found=null;
+        for(let cc=0;cc<m.cols;cc++) if(walkable(m,r,cc,false)){ found=cc; break; }
+        if(found==null) return;
+        c = found;
+      }
+    }else{
+      r = e.side==="top" ? 0 : m.rows-1; c = e.pos;
+      if(!walkable(m,r,c,false)){
+        let found=null;
+        for(let rr=0;rr<m.rows;rr++) if(walkable(m,rr,c,false)){ found=rr; break; }
+        if(found==null) return;
+        r = found;
+      }
+    }
+    (e.kind===2 ? ents : vils).push([r,c]);
+    edgeDir[r+"_"+c] = {right:[0,1], left:[0,-1], up:[-1,0], down:[1,0]}[e.dir] || null;
+  });
+  const inside = p=>p[0]>=0&&p[1]>=0&&p[0]<m.rows&&p[1]<m.cols;
+  const mk = (grp, isVillage)=>{
+    const key = p=>p[0]+"_"+p[1];
+    const lead = grp.find(p=>m.labels[key(p)]) || grp[0];
+    const label = m.labels[key(lead)] || "";
+    let dir = arrowOf(label);
+    if(!dir) dir = edgeDir[key(lead)] || null;
+    let front = null;
+    if(dir){
+      const p = isVillage ? [lead[0]-dir[0], lead[1]-dir[1]] : [lead[0]+dir[0], lead[1]+dir[1]];
+      if(inside(p)) front = p;
+    }else{
+      // 图册少数出入口没画箭头：只有一个可走邻居就用它，否则就用这一格自己
+      const nb = DIRS.map(([dr,dc])=>[lead[0]+dr, lead[1]+dc]).filter(p=>inside(p)&&walkable(m,p[0],p[1],false));
+      front = nb.length===1 ? nb[0] : lead;
+    }
+    return {cells:grp, lead, label, dir, front};
+  };
+  return {
+    entrances: groupMarkers(m, ents).map(g=>mk(g, false)),
+    villages:  groupMarkers(m, vils).map(g=>mk(g, true)),
+  };
+}
+function bfsFrom(m, sources, withBuildings){
+  const key = p=>p[0]+","+p[1];
+  const dist = new Map(), prev = new Map(), q = [];
+  sources.forEach(p=>{ dist.set(key(p),0); q.push(p); });
+  let head=0;
+  while(head<q.length){
+    const [r,c] = q[head++];
+    const nb=[];
+    neighborsOf(m,r,c,withBuildings,nb);
+    nb.forEach(([nr,nc])=>{
+      const k = nr+","+nc;
+      if(dist.has(k)) return;
+      dist.set(k, dist.get(key([r,c]))+1);
+      prev.set(k, [r,c]);
+      q.push([nr,nc]);
+    });
+  }
+  return {dist, prev};
+}
+/* 每个出狼口都取到最近羊村口的最短路线 */
+function shortestPaths(){
+  const m = cur(), {entrances, villages} = entryGroups(m);
+  if(!entrances.length || !villages.length) return [];
+  const key = p=>p[0]+","+p[1];
+  const targets = villages.map(v=>v.front).filter(Boolean);
+  const targetKeys = new Set(targets.map(key));
+  const out = [];
+  entrances.forEach(e=>{
+    const start = e.front;
+    if(!start || !walkable(m,start[0],start[1],true)) return;
+    const {dist, prev} = bfsFrom(m, [start], true);
+    let bestD = Infinity;
+    villages.forEach(v=>{
+      if(!v.front) return;
+      const d = dist.get(key(v.front));
+      if(d!=null && d<bestD) bestD = d;
+    });
+    if(bestD===Infinity) return;
+    // 先取一条最短路线
+    const target = targets.find(t=>dist.get(key(t))===bestD);
+    if(!target) return;
+    const base = [];
+    let p = target;
+    while(p){ base.push(p); p = prev.get(key(p)); }
+    base.reverse();
+    const routes = [base];
+    // 「传送入」对多个「传送出」时，每条分支都要画出来
+    base.forEach((cell, i)=>{
+      if(cellType(m,cell[0],cell[1])!==4) return;
+      const gid = (m.tele||{})[cell[0]+"_"+cell[1]];
+      const outs = [];
+      for(let r=0;r<m.rows;r++) for(let c=0;c<m.cols;c++){
+        if(cellType(m,r,c)!==5) continue;
+        if(gid!=null && (m.tele||{})[r+"_"+c]!==gid) continue;
+        outs.push([r,c]);
+      }
+      if(outs.length<=1) return;
+      const prefix = base.slice(0, i+1);
+      outs.forEach(o=>{
+        const nxt = base[i+1];
+        if(nxt && o[0]===nxt[0] && o[1]===nxt[1]) return;   // 主路线已经走了这条
+        const sub = bfsFrom(m, [o], true);
+        let bd = Infinity;
+        targetKeys.forEach(k=>{ const d = sub.dist.get(k); if(d!=null && d<bd) bd = d; });
+        if(bd===Infinity) return;
+        const tk = [...targetKeys].find(k=>sub.dist.get(k)===bd);
+        const tail = [];
+        let q = tk.split(",").map(Number);
+        while(q){ tail.push(q); q = sub.prev.get(key(q)); }
+        tail.reverse();
+        routes.push([...prefix, ...tail]);
+      });
+    });
+    routes.forEach(r=>{
+      const vil = villages.find(v=>v.front && key(v.front)===key(r[r.length-1]));
+      out.push({ path:[e.lead, ...r, ...(vil? [vil.lead] : [])], from:e, to:vil });
+    });
+  });
+  return out;
+}
+/* 上一格：距离正好少 1，并且真的能从它走到这一格 */
+function parentsOf(m, cell, dist, withBuildings){
+  const key = p=>p[0]+","+p[1];
+  const d = dist.get(key(cell));
+  const out = [];
+  if(d==null || d<=0) return out;
+  const self = cellType(m,cell[0],cell[1]);
+  for(const [dr,dc] of DIRS){
+    const p = [cell[0]+dr, cell[1]+dc];
+    if(dist.get(key(p))!==d-1) continue;
+    if(cellType(m,p[0],p[1])===4) continue;      // 传送入不能直接走到旁边
+    out.push(p);
+  }
+  if(self===5){                                   // 传送出：上一格可能是同色传送入
+    const gid = (m.tele||{})[cell[0]+"_"+cell[1]];
+    for(let r=0;r<m.rows;r++) for(let c=0;c<m.cols;c++){
+      if(cellType(m,r,c)!==4) continue;
+      if(gid!=null && (m.tele||{})[r+"_"+c]!==gid) continue;
+      if(dist.get(r+","+c)===d-1) out.push([r,c]);
+    }
+  }
+  return out;
+}
+/* 传送是瞬移，画线时要断开成分段 */
+function pathSegments(path){
+  const segs=[]; let cur=[];
+  path.forEach((p,i)=>{
+    if(i>0){
+      const q = path[i-1];
+      if(Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1]) !== 1){   // 不是相邻 → 传送到别处了
+        if(cur.length) segs.push(cur);
+        cur=[];
+      }
+    }
+    cur.push(p);
+  });
+  if(cur.length) segs.push(cur);
+  return segs;
+}
+function checkPath(){
+  const m = cur();
+  const {entrances, villages} = entryGroups(m);
+  const box = document.getElementById("pathInfo");
+  if(!entrances.length || !villages.length){
+    box.innerHTML = '<span class="warn">本图没有识别到出狼口或羊村入口。</span>' +
+      '<div class="note">可以用「改地形」工具手动标注。</div>';
+    return;
+  }
+  const key = p=>p[0]+","+p[1];
+  // 出狼口：箭头方向前那一格才是有效起点；入村口：箭头方向后那一格是狼进村前的最后一格
+  const starts = entrances.map(e=>e.front).filter(Boolean);
+  const terrOk = p=>p && walkable(m,p[0],p[1],false);
+  const realOk = p=>p && walkable(m,p[0],p[1],true);
+  const badEntT = entrances.filter(e=>!terrOk(e.front));
+  const badEnt  = entrances.filter(e=>!realOk(e.front));
+  const badVilT = villages.filter(v=>!terrOk(v.front));
+  const badVil  = villages.filter(v=>!realOk(v.front));
+
+  // 只看地形
+  const terr = bfsFrom(m, starts.filter(terrOk), false);
+  const terrOpenV = villages.filter(v=>v.front && terr.dist.has(key(v.front)));
+  // 算上建筑
+  const built = bfsFrom(m, starts.filter(realOk), true);
+  const openV = villages.filter(v=>v.front && built.dist.has(key(v.front)));
+
+  let html = "";
+  // 地形层面（游戏本身保证连通，这里只在数据可能有问题时提醒一句）
+  if(badEntT.length || badVilT.length){
+    html += '<div class="note">（本图出入口方向上的格子在地形数据里不可走，可能是图册画错了，可用「改地形」修正）</div>';
+  }
+  if(badEnt.length){
+    html += '<div class="warn">× 有 '+badEnt.length+' 个出狼口被堵住了！出狼口顺着箭头方向的第 1 格不能放建筑。</div>';
+  }
+  if(openV.length===0){
+    html += '<div class="warn"'+(html?' style="margin-top:4px"':'')+'>× 当前布阵把所有入村口都堵死了，至少要留 1 个。</div>';
+  }else if(openV.length < villages.length){
+    html += '<div class="warn"'+(html?' style="margin-top:4px"':'')+'>△ 有 '+(villages.length-openV.length)+' 个入村口进不去（只要还剩 1 个就允许）。</div>';
+  }else{
+    html += '<div class="ok"'+(html?' style="margin-top:4px"':'')+'>√ 出狼口一个都没被堵，入村口都还能走到。</div>';
+  }
+  const paths = shortestPaths();
+  if(paths.length){
+    html += '<div class="note" style="margin-top:4px">出狼口 '+entrances.length+' 个，羊村入口 '+villages.length+' 个；' +
+            '最短路线共 '+paths.length+' 条，长度：'+paths.map(p=>p.path.length).join(" / ")+' 格' +
+            (paths.length<entrances.length ? '（有 '+(entrances.length-paths.length)+' 个出狼口走不出去）' : '') +
+            '</div>';
+  }
+  box.innerHTML = html;
+}
+
+/* ================= 面板 ================= */
+function setHint(t){ document.getElementById("hint").textContent = t || ""; }
+
+function renderChapters(){
+  const box = document.getElementById("chapterTabs"); box.innerHTML="";
+  [1,2,3,4,0].forEach(ch=>{
+    const b = document.createElement("button");
+    b.className = "chip" + (state.chapter===ch ? " on":"");
+    b.textContent = CHAPTER_NAME[ch];
+    b.onclick = ()=>{ state.chapter = ch; renderChapters(); renderMapList();
+      const first = D.maps.findIndex(m=>m.chapter===ch);
+      if(first>=0 && cur().chapter!==ch) selectMap(first); };
+    box.appendChild(b);
+  });
+}
+function renderMapList(){
+  const box = document.getElementById("mapList"); box.innerHTML="";
+  D.maps.forEach((m,i)=>{
+    if(m.chapter!==state.chapter) return;
+    const n = layoutOf(m).length;
+    const b = document.createElement("button");
+    b.className = "chip" + (i===state.mapIdx?" on":"");
+    b.textContent = (m.no ? m.no+" " : "") + m.name + (n? " ·"+n : "");
+    b.onclick = ()=>selectMap(i);
+    box.appendChild(b);
+  });
+}
+function renderTowers(){
+  const box = document.getElementById("towerList"); box.innerHTML="";
+  TOWER_ORDER.forEach(n=>{
+    const b = document.createElement("button");
+    b.className = "chip" + (state.sel.kind==="tower" && state.sel.tower===n ? " on":"");
+    b.textContent = n + " ≤" + MAXLV[n];
+    b.onclick = ()=>{ state.sel.kind="tower"; state.sel.tower=n; syncLevel(); renderTowers(); renderSpecs(); renderSel(); };
+    box.appendChild(b);
+  });
+}
+function renderGems(){
+  const cbox = document.getElementById("gemColorList"); cbox.innerHTML="";
+  GEM_COLORS.forEach(col=>{
+    const g = D.gems.find(x=>x.color===col);
+    const b = document.createElement("button");
+    b.className = "chip gem" + (gemById(state.sel.gem).color===col ? " on":"");
+    b.innerHTML = '<span class="dot" style="background:'+(g?g.hex:"#b9c2c7")+'"></span>'+(g?g.colorName:"无");
+    b.onclick = ()=>{ setGemColor(col); };
+    cbox.appendChild(b);
+  });
+  const tbox = document.getElementById("gemTierList"); tbox.innerHTML="";
+  const curColor = gemById(state.sel.gem).color;
+  GEM_TIERS.forEach(tier=>{
+    const g = D.gems.find(x=>x.color===curColor && x.tier===tier);
+    const b = document.createElement("button");
+    b.className = "chip" + (curColor!==0 && gemById(state.sel.gem).tier===tier ? " on":"") + (curColor===0?" off":"");
+    b.textContent = TIER_NAME[tier];
+    b.onclick = ()=>{ if(curColor===0) return; state.sel.gem = g.id; renderGems(); renderSel(); };
+    tbox.appendChild(b);
+  });
+}
+function setGemColor(color){
+  if(color===0){ state.sel.gem = "none"; }
+  else{
+    const tier = gemById(state.sel.gem).tier || 3;
+    const g = D.gems.find(x=>x.color===color && x.tier===tier) || D.gems.find(x=>x.color===color && x.tier===3);
+    state.sel.gem = g.id;
+  }
+  syncLevel(); renderGems(); renderSel();
+}
+function renderSpecs(){
+  const box = document.getElementById("specList"); box.innerHTML="";
+  const sec = secOf();
+  D.special.forEach(s=>{
+    const used = layoutOf().filter(b=>b.kind==="special"&&b.spec===s.name).length;
+    const b = document.createElement("button");
+    b.className = "chip" + (state.sel.kind==="special" && state.sel.spec===s.name ? " on":"");
+    b.textContent = s.name + " ("+used+"/"+(s.limit>=90?"∞":s.limit)+")";
+    b.title = s.effect + " · 造价 " + fmt(sec==="front"?s.front:s.defend);
+    b.onclick = ()=>{ state.sel.kind="special"; state.sel.spec=s.name; renderTowers(); renderSpecs(); renderSel(); };
+    box.appendChild(b);
+  });
+}
+function renderSel(){
+  const box = document.getElementById("selInfo");
+  const sec = secOf();
+  if(state.sel.kind==="tower"){
+    const cost = towerCost(state.sel.tower, state.sel.level, sec);
+    const atk = towerAtk(state.sel.tower, state.sel.level, state.sel.gem);
+    const rg = rangeInfo(state.sel.tower, state.sel.gem);
+    const g = gemById(state.sel.gem);
+    let rangeText = "—";
+    if(rg && rg.type==="circle") rangeText = rg.r.toFixed(2)+" 格" + (rg.blind? "（近处 "+rg.blind.toFixed(1)+" 格打不到）":"");
+    else if(rg && rg.type==="cross") rangeText = "十字 上下左右各 "+rg.arms.toFixed(1)+" 格";
+    box.innerHTML =
+      '<div class="kv"><span>'+state.sel.tower+' Lv.'+state.sel.level+'</span><b>'+(atk==null?"-":fmt(atk))+' 攻击</b></div>'+
+      '<div class="kv"><span>宝石</span><span>'+g.name+'</span></div>'+
+      '<div class="kv"><span>造价</span><b>'+fmt(cost)+'</b></div>'+
+      '<div class="kv"><span>攻击范围</span><span>'+rangeText+'</span></div>'+
+      (g.price? '<div class="kv"><span class="note">宝石售价</span><span class="note">'+fmt(g.price)+' 金（不计入总造价）</span></div>' : '')+
+      '<div class="kv"><span class="note">升级经验</span><span class="note">'+fmt(towerExp(state.sel.tower,state.sel.level,sec))+'</span></div>';
+  }else{
+    const s = specInfo(state.sel.spec);
+    box.innerHTML =
+      '<div class="kv"><span>'+s.name+'</span><b>'+fmt(specCost(s.name, sec))+'</b></div>'+
+      '<div class="kv"><span>每图上限</span><span>'+(s.limit>=90?"不限":s.limit+" 个")+'</span></div>'+
+      '<div class="note" style="margin-top:4px">'+s.effect+'（上下左右各两格的十字，不含自身）</div>';
+  }
+}
+function syncLevel(){
+  const max = MAXLV[state.sel.tower]||100;
+  const r = document.getElementById("lvRange"), n = document.getElementById("lvNum");
+  r.max = max; n.max = max;
+  if(state.sel.level>max) state.sel.level = max;
+  if(state.sel.level<1) state.sel.level = 1;
+  r.value = state.sel.level; n.value = state.sel.level;
+  document.getElementById("lvHint").textContent = state.sel.kind==="tower"
+    ? "上限 "+max+" 级（按当前塔的类型）" : "";
+}
+function setLevel(v){
+  const max = MAXLV[state.sel.tower]||100;
+  state.sel.level = Math.max(1, Math.min(max, Math.round(v)||1));
+  syncLevel(); renderSel(); 
+}
+function renderStats(){
+  const m = cur(), sec = secOf(m);
+  const byType = {};
+  let total=0, exp=0;
+  layoutOf().forEach(b=>{
+    const c = bCost(b, sec); total += c;
+    const k = b.kind==="special" ? b.spec : b.tower;
+    if(!byType[k]) byType[k] = {n:0, cost:0};
+    byType[k].n++; byType[k].cost += c;
+    if(b.kind==="tower") exp += towerExp(b.tower,b.level,sec);
+  });
+  document.getElementById("sumTotal").textContent = fmt(total);
+  // 参考收入：大本营防线不显示；造价超过参考收入标红
+  const isCamp = m.chapter === 0;
+  const inc = isCamp ? null : m.income;
+  document.getElementById("incomeRow").style.display = inc==null ? "none" : "flex";
+  document.getElementById("sumIncome").textContent =
+    inc==null ? "—" : (inc==="无限" ? "无限" : fmt(+inc) + " 银币");
+  const over = (inc!=null && inc!=="无限" && total > +inc);
+  const totalEl = document.getElementById("sumTotal");
+  totalEl.style.color = over ? "var(--warn)" : "";
+  totalEl.title = over ? "总造价已经超过这张图的参考收入" : "";
+  // 升级经验：只在大本营防线显示
+  document.getElementById("expRow").style.display = isCamp ? "flex" : "none";
+  document.getElementById("sumExp").textContent = fmt(exp);
+  document.getElementById("sumRows").innerHTML = Object.keys(byType).map(k=>
+    '<div class="kv"><span>'+k+' × '+byType[k].n+'</span><b>'+fmt(byType[k].cost)+'</b></div>').join("")
+    || '<div class="note">还没有布置任何建筑</div>';
+  document.getElementById("cnt").textContent = layoutOf().length;
+
+  // 宝石统计：数量 + 品质 + 颜色
+  const byCombo = {};
+  let gemNum = 0, noneNum = 0;
+  layoutOf().forEach(b=>{
+    if(b.kind!=="tower") return;
+    const g = gemById(b.gem);
+    if(!g.tier){ noneNum++; return; }
+    gemNum++;
+    const k = g.colorName + "|" + TIER_NAME[g.tier];
+    byCombo[k] = (byCombo[k]||0) + 1;
+  });
+  const colorOrder = ["红","绿","黄","紫","蓝","黑"];
+  const tierOrder = ["碎片","晶体","宝石","精华","强化"];
+  const comboKeys = Object.keys(byCombo).sort((a,b)=>{
+    const [ca,ta] = a.split("|"), [cb,tb] = b.split("|");
+    return colorOrder.indexOf(ca)-colorOrder.indexOf(cb) || tierOrder.indexOf(ta)-tierOrder.indexOf(tb);
+  });
+  document.getElementById("gemStats").innerHTML =
+    '宝石共 <b>'+gemNum+'</b> 颗' + (noneNum? '（另有 '+noneNum+' 座塔无宝石）':'') +
+    (gemNum? '<br>' + comboKeys.map(k=>{
+      const [c,t] = k.split("|");
+      return c+t+'×'+byCombo[k];
+    }).join("、") : '');
+
+  const list = document.getElementById("bList"); list.innerHTML="";
+  layoutOf().slice().sort((a,b)=>a.r-b.r||a.c-b.c).forEach(b=>{
+    const d = document.createElement("div");
+    const sel = state.selBuilding && state.selBuilding.r===b.r && state.selBuilding.c===b.c;
+    d.className = "item" + (sel?" sel":"");
+    let name;
+    let tag = "";
+    if(b.kind==="special"){
+      name = b.spec;
+    }else{
+      const g = gemById(b.gem);
+      name = '<span class="dot" style="background:'+g.hex+'"></span>' + buildingLabel(b) + " Lv." + b.level;
+      const buff = statueBuff(b.r,b.c);
+      if(buff.atk>1) tag += '<span class="tag">+攻</span>';
+      if(buff.range>1) tag += '<span class="tag">+程</span>';
+    }
+    d.innerHTML = '<span class="nm">'+name+tag+'</span><span>'+(b.r+1)+'-'+(b.c+1)+' · '+fmt(bCost(b,sec))+'</span>';
+    d.onclick = ()=>{ state.selBuilding={r:b.r,c:b.c}; renderStats(); draw(); };
+    list.appendChild(d);
+  });
+}
+function renderNotes(){
+  const m = cur();
+  document.getElementById("mapNotes").innerHTML = (m.notes&&m.notes.length)
+    ? m.notes.map(n=>"· "+n).join("<br>")
+    : '<span class="note">本图在图册里没有特殊地形说明。</span>';
+  const eg = entryGroups(m);
+  document.getElementById("mapBrief").textContent =
+    (m.no ? "第" + m.no + "图 · " : "") + m.name +
+    "　出狼口 " + eg.entrances.length + " 个 · 入村口 " + eg.villages.length + " 个";
+  document.getElementById("mapMeta").textContent =
+    (m.no ? "第" + m.no + "图 · " : "") + m.name + " · " + (m.chapter===0?"防线":"前线") +
+    " · " + m.cols + "×" + m.rows + " 格";
+}
+function renderLegend(){
+  const m = cur();
+  const used = new Set();
+  for(let r=0;r<m.rows;r++) for(let c=0;c<m.cols;c++) used.add(cellType(m,r,c));
+  (m.edges||[]).forEach(e=>used.add(e.kind));
+  const rows = Object.keys(TYPE_NAME).filter(k=>used.has(+k)).map(k=>
+    '<div><i style="background:'+COLORS[k]+'"></i>'+TYPE_NAME[k]+'</div>');
+  // 本图特有的地形（图册「注：」里列的那些）也按颜色列进图例
+  const special = (m.legend||[]).map(([name, type])=>
+    '<div><i style="background:'+COLORS[type]+'"></i>'+name+'（'+TYPE_NAME[type]+'）</div>');
+  let html = rows.join("");
+  if(special.length) html += '<div style="grid-column:1/3;margin-top:4px" class="note">本图特殊地形：</div>' + special.join("");
+  document.getElementById("legend").innerHTML = html || '<div class="note">本图只有一种地形。</div>';
+}
+function loadBaseImage(){
+  const m = cur(); baseImg = null;
+  if(!m.img) return;
+  const im = new Image();
+  im.onload = ()=>{ baseImg = im; draw(); };
+  im.src = m.img;
+}
+
+/* ================= 模拟出狼 ================= */
+/* ---------- 走狼预测（简化战斗模拟） ----------
+   规则来自羊村研究笔记：25FPS（一帧 40ms）；塔攻击后冷却设为 2500，每帧减去面板攻速
+   （配置 rate × 10），所以攻击间隔 = 2500/(rate×10) 帧（哨塔 rate18 → 0.556s，与笔记一致）；
+   坐标单位 1000 = 1 格，狼速 speed 的单位是“每帧多少单位”。
+   简化：狼沿最短路线直线前进；不计算抗性、护盾、召唤、隐身、飞行、传送带与技能打断。 */
+const TICK = 0.04, UNIT = 1 / 1000;
+function towerCombat(b){
+  const buff = statueBuff(b.r, b.c);
+  const atk = towerAtk(b.tower, b.level, b.gem) || 0;
+  const rate = (D.towerRate||{})[b.tower] || 18;
+  const g = gemById(b.gem), e = D.gemEffect || {};
+  const pick = (tbl)=> ((((e[tbl]||{})[b.tower])||{})[g.tierName]) || 0;
+  let slow = 0, poison = null, burn = null;
+  if(g.color === 4){                       // 蓝宝石 = 冰霜减速
+    slow = b.tower==="镶嵌塔" ? (((e.slowXq||{})[b.level]||{})[g.tierName]||0)
+                              : (((e.slow||{})[b.tower]||{})[g.tierName]||0);
+  }else if(g.color === 3){                 // 绿宝石 = 毒性伤害
+    const r = (((e.poison||{})[b.tower])||{})[g.tierName];
+    if(r) poison = { perSec: atk*(r.mul||0), dur: r.dur||4 };
+  }else if(g.color === 1){                 // 红宝石 = 燃烧（哨塔/散弹塔）
+    const v = (((e.burn||{})[b.tower])||{})[g.tierName];
+    if(v) burn = { perSec: v, dur: 5 };
+  }
+  // 黑宝石连击（平均增伤）、黄宝石暴击 / 眩晕、红宝石胆怯、紫宝石击退 / 电属性
+  const combo = g.color===6 ? (pick("combo") || 0) : 0;
+  const comboMul = combo > 1 ? 1 + 0.08*(combo-1) : 1;
+  return {
+    dmg: Math.max(0, Math.round(atk*buff.atk*comboMul)),
+    interval: 2500/(rate*10)*TICK,
+    info: rangeInfo(b.tower, b.gem),
+    slow, poison, burn,
+    crit: g.color===2 ? (pick("crit") || null) : null,
+    vertigo: g.color===2 ? (pick("vertigo") || null) : null,
+    timid: g.color===1 ? (pick("timid") || null) : null,
+    knock: g.color===5 ? (pick("knock") || 0) : 0,
+    cuss: (b.tower==="镶嵌塔" && g.color===6) ? (pick("cuss") || 0) : 0,
+    elec: (b.tower==="镶嵌塔" && g.color===5),      // 紫宝石镶嵌塔 = 闪电攻击
+    airMul: b.tower === "散弹塔" ? 2 : 1,     // 散弹塔打飞行狼伤害与效果翻倍
+    canAir: !(b.tower === "炮塔" || b.tower === "波动塔"),   // 炮塔、波动塔只能对地
+  };
+}
+function canHitAir(T, w){ return !w.fly || T.canAir; }
+function wolfPoint(w){
+  const n = w.route.length;
+  const i = Math.max(0, Math.min(Math.floor(w.pos), n-1));
+  const j = Math.min(i+1, n-1);
+  const f = Math.max(0, Math.min(1, w.pos - i));
+  const a = w.route[i], b = w.route[j];
+  return [a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f];
+}
+function inRange(m, tw, info, wr, wc){
+  if(!info) return false;
+  const dr = wr - tw[0], dc = wc - tw[1];
+  if(info.type === "cross"){
+    const along = (Math.abs(dr) < 1 && Math.abs(dc) <= info.arms+0.5) ||
+                  (Math.abs(dc) < 1 && Math.abs(dr) <= info.arms+0.5);
+    if(!along) return false;
+    const step = Math.abs(dr) < 1 ? [0, Math.sign(dc)] : [Math.sign(dr), 0];
+    const len = Math.max(Math.abs(dr), Math.abs(dc));
+    for(let i=1;i<=len;i++) if(blocksWave(m, tw[0]+step[0]*i, tw[1]+step[1]*i)) return false;
+    return true;
+  }
+  const d = Math.hypot(dr, dc);
+  const blind = info.blind || 0.35;        // 默认打不到紧贴塔身的位置
+  return d <= info.r && d >= blind;
+}
+function simulateWalk(){
+  const m = cur();
+  const wave = generateWave();
+  if(!wave) return {err:"这张图没有出狼配置"};
+  const routes = shortestPaths();
+  if(!routes.length) return {err:"当前布阵下狼走不出去（出狼口被堵或路线不通）"};
+  const towers = layoutOf().filter(b=>b.kind==="tower").map(b=>({
+    r:b.r, c:b.c, level:b.level, label:buildingLabel(b), cd: Math.random()*0.6, ...towerCombat(b),
+  }));
+  const wolves = [];
+  wave.list.forEach((w, i)=>{
+    const info = D.wolfs[w.id] || {};
+    const hp = wolfHp(w.id, wave.level, wave.diff);
+    wolves.push({
+      id:w.id, name:wolfName(w.id), hp, hpMax:hp,
+      fly: !!(D.wolfs[w.id]||{}).fly,
+      res: (D.wolfSkill||{})[w.id] || {},
+      route: routes[i % routes.length].path,
+      pos: 0,
+      speed: (info.speed || 20) * UNIT * 25,
+      spawn: i * 0.4,
+      done:false, leaked:false,
+      slow:0, slowT:0, poison:null, poisonT:0, burns:[],
+      stunT:0, backT:0, cuss:null,
+    });
+  });
+  let dmgDealt = 0, killed = 0, t = 0;
+  for(t = 0; t < 600; t += TICK){
+    let active = 0;
+    for(const w of wolves){
+      if(w.done) continue;
+      if(t < w.spawn){ active++; continue; }
+      if(w.slowT > 0) w.slowT -= TICK; else w.slow = 0;
+      if(w.stunT > 0){ w.stunT -= TICK; active++; continue; }        // 被眩晕：原地不动
+      let dot = 0;
+      if(w.poisonT > 0){ w.poisonT -= TICK; if(w.poison) dot += w.poison.perSec; }
+      w.burns = w.burns.filter(b=>b.until > t);
+      for(const b of w.burns) dot += b.perSec;
+      if(w.cuss && w.cuss.hits > 0 && w.cuss.until <= t){            // 诅咒到期结算
+        dot += w.cuss.hits * w.cuss.energy;
+        w.cuss.hits = 0;
+      }
+      if(dot > 0){
+        w.hp -= dot*TICK; dmgDealt += dot*TICK;
+        if(w.hp <= 0){ w.hp = 0; w.done = true; killed++; continue; }
+      }
+      // 抗冰可以超过 100%：减速会变成加速（超级抗冰的狼越被冰越跑得快）
+      const slowFactor = Math.max(0, 1 - w.slow*(1 - (w.res.frost || 0)));
+      if(w.backT > 0){                                               // 胆怯：往回走
+        w.backT -= TICK;
+        w.pos = Math.max(0, w.pos - w.speed*TICK*0.8);
+      }else{
+        w.pos += w.speed * TICK * slowFactor;
+      }
+      if(w.pos >= w.route.length - 1){ w.pos = w.route.length-1; w.leaked = true; w.done = true; continue; }
+      active++;
+    }
+    if(active === 0) break;
+    for(const T of towers){
+      T.cd -= TICK;
+      if(T.cd > 0) continue;
+      let best = null;
+      for(const w of wolves){
+        if(w.done || t < w.spawn) continue;
+        if(!canHitAir(T, w)) continue;             // 飞行狼：炮塔、波动塔打不到
+        const p = wolfPoint(w);
+        if(!inRange(m, [T.r, T.c], T.info, p[0], p[1])) continue;
+        if(!best || w.pos > best.pos) best = w;
+      }
+      if(!best){ T.cd = 0; continue; }
+      T.cd = T.interval;
+      const mul = best.fly ? T.airMul : 1;         // 散弹塔打飞行狼翻倍
+      const res = best.res || {};
+      let dmg = T.dmg*mul;
+      if(T.elec) dmg *= Math.max(0, 1 - (res.light || 0));      // 免疫电：完全无视闪电攻击
+      if(T.crit && Math.random() < T.crit.chance) dmg *= T.crit.mul;
+      best.hp -= dmg; dmgDealt += dmg;
+      if(T.slow){ best.slow = Math.max(best.slow, T.slow/100*mul); best.slowT = 3; }
+      if(T.poison){
+        const ps = { perSec: T.poison.perSec*mul*Math.max(0, 1 - (res.poison || 0)), dur: T.poison.dur*mul };
+        if(!best.poison || ps.perSec > best.poison.perSec) best.poison = ps;
+        best.poisonT = T.poison.dur;
+      }
+      if(T.burn) best.burns.push({ perSec: T.burn.perSec*mul*Math.max(0, 1 - (res.fire || 0)), until: t + T.burn.dur*mul });
+      if(T.vertigo && Math.random() < T.vertigo.chance*Math.max(0, 1 - (res.vertigo || 0))){
+        best.stunT = Math.max(best.stunT, T.vertigo.dur);       // 眩晕：停 2 秒
+      }
+      if(T.timid && Math.random() < T.timid.chance) best.backT = T.timid.dur;   // 胆怯：往回走
+      if(T.knock && Math.random() < T.knock) best.pos = Math.max(0, best.pos - 1);  // 击退
+      if(T.cuss){                                              // 黑宝石诅咒
+        if(!best.cuss || best.cuss.until <= t) best.cuss = { until: t + 5, energy: T.cuss*(T.level||1), hits: 1 };
+        else best.cuss.hits++;
+      }
+      if(best.hp <= 0){ best.hp = 0; best.done = true; killed++; }
+    }
+  }
+  const byType = {};
+  wolves.forEach(w=>{
+    const k = w.name;
+    byType[k] = byType[k] || { kill:0, leak:0, leakHp:0, hpMax:w.hpMax };
+    if(w.leaked){ byType[k].leak++; byType[k].leakHp += w.hp; }
+    else byType[k].kill++;
+  });
+  return {
+    wave, wolves, byType, killed, towers: towers.length,
+    leaked: wolves.filter(w=>w.leaked).length,
+    leakHp: wolves.filter(w=>w.leaked).reduce((s,w)=>s+w.hp,0),
+    dmgDealt: Math.round(dmgDealt), time: t,
+  };
+}
+function renderSim(res){
+  const box = document.getElementById("simResult");
+  if(!res){ box.innerHTML = ""; return; }
+  if(res.err){ box.innerHTML = '<span class="warn">'+res.err+'</span>'; return; }
+  const rows = Object.keys(res.byType).map(k=>{
+    const v = res.byType[k];
+    const tag = v.leak ? '<span class="warn">进村 '+v.leak+' 只（剩血 '+fmt(Math.round(v.leakHp))+'）</span>'
+                       : '<span class="ok">全灭</span>';
+    return '<div class="kv"><span>'+k+'（'+fmt(v.hpMax)+' 血）</span><span>'+tag+'</span></div>';
+  }).join("");
+  const ok = res.leaked === 0;
+  box.innerHTML =
+    '<div class="'+(ok?'ok':'warn')+'" style="font-weight:600">'+
+      (ok ? '√ 这波全部拦下（'+res.wolves.length+' 只）'
+          : '× 有 '+res.leaked+' 只进村，共带进 '+fmt(Math.round(res.leakHp))+' 血')+
+    '</div>'+
+    '<div class="kv"><span>击杀 / 总数</span><b>'+res.killed+' / '+res.wolves.length+'</b></div>'+
+    '<div class="kv"><span>塔造成总伤害</span><b>'+fmt(res.dmgDealt)+'</b></div>'+
+    '<div class="kv"><span>模拟用时</span><b>'+res.time.toFixed(1)+' 秒</b></div>'+
+    '<div style="margin-top:4px">'+rows+'</div>'+
+    '<div class="note" style="margin-top:4px">'+
+    '已计入：塔的攻击力 / 攻速 / 射程（含雕像加成、黑宝石近处盲区、波动塔十字阻挡）、'+
+    '狼的冰霜 / 光 / 毒 / 火抗性与免疫电、减速（抗冰可超过 100%，会变成提速）、'+
+    '毒性伤害、燃烧、诅咒、暴击、眩晕、胆怯、击退，以及飞行（炮塔/波动塔打不到，散弹塔翻倍）。</div>'+
+    '<div class="warn" style="margin-top:4px">数据保守，仅供参考：未计入狼的隐身、狂奔、召唤、复活、护盾、'+
+    '群体治疗等技能，也未计入传送带、火山 / 反应炉等地形与塔的攻速加成。</div>';
+}
+function wolfName(id){ return (D.wolfs[id]||{}).name || id; }
+function simScore(){
+  const v = +document.getElementById("simScore").value || 0;
+  return Math.max(0, v);
+}
+function simDiff(){
+  const keys = Object.keys(D.waveDiff||{});
+  const v = document.getElementById("simDiff").value;
+  return keys.length ? (+v || 1) : 1;
+}
+/* 等级 L = sqrt(ha + hb*进度)（和羊村百科里的算法一致） */
+function simLevel(){
+  const m = cur(), cfg = m.wolf;
+  if(!cfg) return 0;
+  return Math.sqrt(Math.max(0, (cfg.hardA||0) + (cfg.hardB||0)*simScore()));
+}
+function wolfHp(id, level, diff){
+  const w = D.wolfs[id];
+  if(!w) return 0;
+  return Math.floor((w.a + level*(w.b + level*w.c)) * diff);
+}
+function renderWolfPanel(){
+  const m = cur(), cfg = m.wolf;
+  // 大本营防线不做模拟出狼
+  document.getElementById("simSection").style.display = (m.chapter===0) ? "none" : "block";
+  if(m.chapter===0) return;
+  const tags = document.getElementById("wolfTags");
+  const scoreEl = document.getElementById("simScore");
+  const diffEl = document.getElementById("simDiff");
+  if(!cfg || !cfg.prop.length){
+    tags.innerHTML = '<span class="note">这张图在图册里没有标注出狼配置。</span>';
+    document.getElementById("simScoreMax").textContent = "";
+    document.getElementById("simLevel").textContent = "—";
+    document.getElementById("simHpList").textContent = "—";
+    document.getElementById("waveResult").textContent = "";
+    return;
+  }
+  let prev = 0;
+  tags.innerHTML = cfg.prop.map(([p,id])=>{
+    const w = D.wolfs[id] || {};
+    const prob = Math.round((p-prev)*100); prev = p;
+    return '<span class="chip" style="cursor:default" title="pop '+w.pop+'、速度 '+w.speed+'">'+
+      wolfName(id)+' '+prob+'%</span>';
+  }).join("");
+  scoreEl.max = cfg.scoreMax || 0;
+  if(!scoreEl.value || +scoreEl.value > (cfg.scoreMax||0)) scoreEl.value = 0;
+  document.getElementById("simScoreMax").textContent = "／上限 " + (cfg.scoreMax||0) + "（一波 +2）";
+  if(!diffEl.options.length){
+    diffEl.innerHTML = Object.keys(D.waveDiff).map(k=>'<option value="'+k+'">'+k+' '+D.waveDiff[k]+'</option>').join("");
+    diffEl.value = "1.0";
+  }
+  const L = simLevel(), diff = simDiff();
+  document.getElementById("simLevel").textContent = L.toFixed(2);
+  document.getElementById("simHpList").innerHTML = cfg.prop.map(([,id])=>
+    wolfName(id)+" "+fmt(wolfHp(id, L, diff))).join("、");
+}
+/* 和羊村百科「波工具」一样的抽法：按 pop 预算从本图狼里抽满一波 */
+let lastWave = null;
+function generateWave(){
+  const m = cur(), cfg = m.wolf;
+  if(!cfg || !cfg.prop.length) return null;
+  const cand = cfg.prop.map(([p,id])=>({ prop:p, id, pop:(D.wolfs[id]||{}).pop||1 }));
+  const n0 = cand.length;
+  const counts = new Array(n0).fill(0);
+  const list = [];
+  let pop = cfg.popMax;
+  let n = n0, guard = 0;
+  while(pop > 0 && guard++ < 2000){
+    while(n > 0 && pop < cand[n-1].pop) n--;
+    if(n === 0) break;
+    const p = Math.random() * cand[n-1].prop;
+    let k = cand.findIndex(t=>p < t.prop);
+    if(k < 0 || k >= n) k = n-1;
+    pop -= cand[k].pop;
+    counts[k]++;
+    list.push(cand[k]);
+  }
+  const L = simLevel(), diff = simDiff();
+  return {
+    list, counts, level:L, diff,
+    ids: cand.map((t,i)=>({ id:t.id, n:counts[i], hp:wolfHp(t.id, L, diff) })),
+    total: list.length,
+  };
+}
+function renderWave(){
+  const box = document.getElementById("waveResult");
+  const w = lastWave;
+  if(!w){ box.innerHTML = '<span class="note">点「随机生成一波」抽一波狼，再点「模拟走狼」看能不能守住。</span>'; return; }
+  const parts = w.ids.filter(t=>t.n>0).map(t=>wolfName(t.id)+" ×"+t.n+"（单只 "+fmt(t.hp)+"）");
+  const sumHp = w.ids.reduce((s,t)=>s+t.n*t.hp, 0);
+  box.innerHTML =
+    '<div class="kv"><span>狼等级 L</span><b>'+w.level.toFixed(2)+'（难度 '+w.diff+' '+(D.waveDiff[String(w.diff)]||"")+'）</b></div>'+
+    '<div class="kv"><span>波内狼数</span><b>'+w.total+' 只</b></div>'+
+    '<div class="kv"><span>总血量</span><b>'+fmt(sumHp)+'</b></div>'+
+    '<div class="kv"><span>平均血量</span><b>'+fmt(w.total? Math.round(sumHp/w.total):0)+'</b></div>'+
+    '<div style="margin-top:4px">'+parts.join("<br>")+'</div>';
+}
+function selectMap(i){
+  state.mapIdx = i; state.selBuilding = null; undoStack.length = 0;
+  lastWave = null;
+  const m = cur();
+  state.chapter = m.chapter;
+  state.align = rec(m).align || {x:0,y:0,s:100};
+  document.getElementById("alX").value = state.align.x;
+  document.getElementById("alY").value = state.align.y;
+  document.getElementById("alS").value = state.align.s;
+  document.getElementById("seedBox").value = "";
+  document.getElementById("seedHint").textContent = "";
+  loadBaseImage(); fitCanvas(); draw();
+  renderChapters(); renderMapList(); renderStats(); renderNotes(); renderSpecs(); checkPath();
+  renderLegend(); renderWolfPanel(); renderWave();
+}
+
+/* ================= 放置 / 编辑 ================= */
+function place(r,c){
+  const m = cur(), R = rec(m);
+  if(r<0||c<0||r>=m.rows||c>=m.cols) return;
+  const t = cellType(m,r,c);
+  if(!BUILD_TYPES.has(t)){ setHint("这个格子不能放建筑（"+TYPE_NAME[t]+"）"); return; }
+  if(entranceFrontKeys(m).has(r+"_"+c)){
+    setHint("这是出狼口顺着箭头方向的第 1 格，不能放建筑（出狼口不能堵住）");
+    return;
+  }
+  const exist = buildingAt(r,c);
+  if(!painting) snapshot();
+  if(state.sel.kind==="special"){
+    const s = specInfo(state.sel.spec);
+    const used = layoutOf().filter(b=>b.kind==="special"&&b.spec===s.name).length;
+    if(!(exist && exist.kind==="special" && exist.spec===s.name) && used>=s.limit){
+      undoStack.pop();
+      setHint(s.name+" 每张图最多 "+(s.limit>=90?"不限":s.limit)+" 个"); return;
+    }
+    if(exist) R.layout.splice(R.layout.indexOf(exist),1);
+    R.layout.push({kind:"special", spec:s.name, r, c});
+  }else{
+    if(exist){ exist.tower=state.sel.tower; exist.gem=state.sel.gem; exist.level=state.sel.level; }
+    else R.layout.push({kind:"tower", tower:state.sel.tower, gem:state.sel.gem, level:state.sel.level, r, c});
+  }
+  save(); draw(); renderStats(); renderSpecs(); checkPath();
+  const last = R.layout[R.layout.length-1];
+  if(last) setHint("已放置 " + buildingLabel(last) + (last.kind==="tower" ? " Lv."+last.level : ""));
+}
+/* 所有出狼口“箭头方向第 1 格”的集合（这些格子不能建东西） */
+function entranceFrontKeys(m){
+  const set = new Set();
+  entryGroups(m).entrances.forEach(e=>{ if(e.front) set.add(e.front[0]+"_"+e.front[1]); });
+  return set;
+}
+function erase(r,c){
+  const R = rec(), b = buildingAt(r,c);
+  if(!b) return;
+  snapshot();
+  R.layout.splice(R.layout.indexOf(b),1);
+  if(state.selBuilding && state.selBuilding.r===r && state.selBuilding.c===c) state.selBuilding=null;
+  save(); draw(); renderStats(); renderSpecs(); checkPath();
+}
+const BRUSHES = [
+  {t:1,name:"可通行 / 可建塔"},
+  {t:0,name:"不可通过"},
+  {t:2,name:"出狼口"},
+  {t:3,name:"羊村入口"},
+  {t:4,name:"传送入"},
+  {t:5,name:"传送出"},
+  {t:6,name:"只能建塔"},
+  {t:7,name:"只能走狼"},
+];
+function renderBrushes(){
+  const box = document.getElementById("terrainBr"); box.innerHTML="";
+  BRUSHES.forEach(b=>{
+    const el = document.createElement("button");
+    el.className = "chip" + (state.brush===b.t?" on":"");
+    el.textContent = b.name;
+    el.onclick = ()=>{ state.brush=b.t; renderBrushes(); };
+    box.appendChild(el);
+  });
+  box.style.display = state.tool==="terrain" ? "flex" : "none";
+}
+function evtCell(ev){
+  const rect = cv.getBoundingClientRect();
+  return { r: Math.floor((ev.clientY-rect.top-PAD)/CELL), c: Math.floor((ev.clientX-rect.left-PAD)/CELL) };
+}
+let dragging = null;
+let painting = false;
+cv.addEventListener("mousedown", ev=>{
+  const {r,c} = evtCell(ev);
+  if(state.tool==="align"){ dragging = {x:ev.clientX, y:ev.clientY, ax:state.align.x, ay:state.align.y}; return; }
+  if(r<0||c<0||r>=cur().rows||c>=cur().cols) return;
+  if(ev.button===2 || state.tool==="erase"){ erase(r,c); return; }
+  if(state.tool==="select"){
+    const b = buildingAt(r,c);
+    state.selBuilding = b ? {r,c} : null;
+    renderStats(); draw(); return;
+  }
+  if(state.tool==="terrain"){
+    snapshot();
+    rec().terrain[r+"_"+c] = state.brush;
+    save(); draw(); renderStats(); checkPath(); return;
+  }
+  if(ev.ctrlKey){ painting = true; snapshot(); }   // Ctrl+左键拖动 = 连续造同样的塔（整批只记一次撤销）
+  place(r,c);
+  if(painting) setHint("连续造塔中：拖动鼠标继续放同样的塔，松开停止");
+});
+window.addEventListener("mouseup", ()=>{ painting = false; });
+window.addEventListener("mousemove", ev=>{
+  if(!dragging) return;
+  state.align.x = dragging.ax + (ev.clientX-dragging.x);
+  state.align.y = dragging.ay + (ev.clientY-dragging.y);
+  document.getElementById("alX").value = state.align.x;
+  document.getElementById("alY").value = state.align.y;
+  draw();
+});
+window.addEventListener("mouseup", ()=>{
+  if(dragging){ dragging=null; rec().align = {...state.align}; save(); }
+});
+cv.addEventListener("contextmenu", ev=>ev.preventDefault());
+cv.addEventListener("mousemove", ev=>{
+  const {r,c} = evtCell(ev);
+  const m = cur();
+  if(r<0||c<0||r>=m.rows||c>=m.cols){ setHint(""); return; }
+  if(painting && state.tool==="build"){          // Ctrl 拖动连续造塔
+    const last = rec().layout[rec().layout.length-1];
+    if(!last || last.r!==r || last.c!==c) place(r,c);
+  }
+  const t = cellType(m,r,c);
+  const b = buildingAt(r,c);
+  const villageArea = (t===3 && !isVillageIn(m,r,c));
+  let s = "第 "+(r+1)+" 行 第 "+(c+1)+" 列 · " + (villageArea ? "羊村范围（不可通行、不可建塔）" : TYPE_NAME[t]);
+  const lab = m.labels[r+"_"+c];
+  if(lab) s += " · "+lab;
+  if(b){
+    if(b.kind==="special") s += " · "+b.spec;
+    else{
+      const buff = statueBuff(b.r,b.c);
+      const atk = towerAtk(b.tower, b.level, b.gem);
+      const rg = rangeInfo(b.tower, b.gem);
+      s += " · "+b.tower+" Lv."+b.level+" 攻击 "+fmt(Math.round((atk||0)*buff.atk));
+      if(!rg) s += " · 范围 —";
+      else if(rg.type==="cross") s += " · 十字各 "+(rg.arms*buff.range).toFixed(1)+" 格"+(buff.range>1?"（含雕像）":"");
+      else s += " · 范围 "+(rg.r*buff.range).toFixed(2)+" 格"+(buff.range>1?"（含雕像）":"")+
+                (rg.blind? "，近处 "+rg.blind.toFixed(1)+" 格打不到":"");
+    }
+  }
+  setHint(s);
+});
+cv.addEventListener("mouseleave", ()=>setHint(""));
+cv.addEventListener("wheel", ev=>{
+  if(state.tool!=="align") return;
+  ev.preventDefault();
+  state.align.s = Math.max(40, Math.min(300, state.align.s * (ev.deltaY<0?1.06:0.94)));
+  document.getElementById("alS").value = Math.round(state.align.s);
+  rec().align = {...state.align}; save(); draw();
+},{passive:false});
+
+/* ================= 种子码 ================= */
+function b64url(bytes){
+  let s=""; for(const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function unb64url(str){
+  str = str.replace(/-/g,"+").replace(/_/g,"/").replace(/\s|\./g,"");
+  const s = atob(str), out=[];
+  for(let i=0;i<s.length;i++) out.push(s.charCodeAt(i));
+  return out;
+}
+function checksum(bytes){
+  let h = 2166136261;
+  for(const b of bytes){ h ^= b; h = (h*16777619) >>> 0; }
+  return h & 0xffff;
+}
+function makeSeed(){
+  const m = cur(), R = rec(m);
+  const bytes = [1, m.no];
+  const layout = R.layout;
+  bytes.push(layout.length & 255, (layout.length>>8)&255);
+  layout.forEach(b=>{
+    const special = b.kind==="special";
+    const idx = special ? D.special.findIndex(s=>s.name===b.spec) : TOWER_ORDER.indexOf(b.tower);
+    const g = gemById(b.gem);
+    bytes.push(b.r & 255, b.c & 255);
+    bytes.push(((special?1:0)<<7) | ((idx&15)<<3) | (g.color&7));
+    bytes.push(g.tier & 7);
+    bytes.push(special ? 0 : (b.level & 255));
+  });
+  const ov = Object.entries(R.terrain||{});
+  bytes.push(ov.length & 255, (ov.length>>8)&255);
+  ov.forEach(([k,t])=>{
+    const [r,c] = k.split("_").map(Number);
+    bytes.push(r & 255, c & 255, t & 15);
+  });
+  const sum = checksum(bytes);
+  bytes.push(sum & 255, (sum>>8)&255);
+  return "YC1-" + b64url(bytes);
+}
+function loadSeed(text){
+  try{
+    const raw = (text||"").trim().replace(/^YC1-/i,"");
+    if(!raw) throw new Error("种子码是空的");
+    const bytes = unb64url(raw);
+    if(bytes.length < 9) throw new Error("种子码长度不对");
+    const sum = bytes[bytes.length-2] | (bytes[bytes.length-1]<<8);
+    const body = bytes.slice(0,-2);
+    if(checksum(body) !== sum) throw new Error("种子码校验失败，可能复制不全或被改过");
+    if(body[0] !== 1) throw new Error("种子码版本不支持");
+    const no = body[1];
+    const map = D.maps.find(m=>m.no===no);
+    if(!map) throw new Error("种子码里的地图编号 "+no+" 不存在");
+    let p = 2;
+    const count = body[p] | (body[p+1]<<8); p += 2;
+    const layout = [];
+    for(let i=0;i<count;i++){
+      const r = body[p], c = body[p+1], meta = body[p+2], tier = body[p+3], level = body[p+4];
+      p += 5;
+      const special = !!(meta>>7);
+      const idx = (meta>>3)&15, color = meta&7;
+      if(r>=map.rows || c>=map.cols) continue;
+      if(special){
+        const s = D.special[idx];
+        if(s) layout.push({kind:"special", spec:s.name, r, c});
+      }else{
+        const tower = TOWER_ORDER[idx];
+        if(tower){
+          const gem = D.gems.find(g=>g.color===color && g.tier===tier);
+          layout.push({kind:"tower", tower, gem: gem?gem.id:"none",
+                       level: Math.max(1, Math.min(MAXLV[tower]||100, level||1)), r, c});
+        }
+      }
+    }
+    const terrain = {};
+    if(p+1 < body.length){
+      const n = body[p] | (body[p+1]<<8); p += 2;
+      for(let i=0;i<n && p+2<body.length;i++){
+        const r = body[p], c = body[p+1], t = body[p+2]; p += 3;
+        terrain[r+"_"+c] = t;
+      }
+    }
+    state.data.maps[map.name] = {layout, terrain, align: (state.data.maps[map.name]||{}).align || {x:0,y:0,s:100}};
+    save();
+    selectMap(D.maps.indexOf(map));
+    renderStats(); renderSpecs(); draw(); checkPath();
+    return "已载入「"+map.name+"」的布阵（"+layout.length+" 座建筑）";
+  }catch(e){ return "载入失败："+e.message; }
+}
+
+/* ================= 按钮 ================= */
+document.getElementById("lvRange").oninput = e=>setLevel(+e.target.value);
+document.getElementById("lvNum").oninput = e=>setLevel(+e.target.value);
+document.querySelectorAll("#toolList .tool").forEach(b=>b.onclick=()=>{
+  state.tool = b.dataset.tool;
+  document.querySelectorAll("#toolList .tool").forEach(x=>x.classList.toggle("on", x===b));
+  document.getElementById("alignBox").style.display = state.tool==="align" ? "block":"none";
+  renderBrushes();
+  setHint(state.tool==="align" ? "拖动底图对齐，滚轮缩放底图" : "");
+});
+document.getElementById("tgBase").onclick = e=>{ state.showBase=!state.showBase; e.target.classList.toggle("on",state.showBase); draw(); };
+document.getElementById("tgPath").onclick = e=>{ state.showPath=!state.showPath; e.target.classList.toggle("on",state.showPath); draw(); };
+document.getElementById("tgRange").onclick = e=>{ state.showRange=!state.showRange; e.target.classList.toggle("on",state.showRange); draw(); };
+document.getElementById("tgGrid").onclick = e=>{ state.showGrid=!state.showGrid; e.target.classList.toggle("on",state.showGrid); draw(); };
+document.getElementById("rangeAlpha").oninput = e=>{ state.rangeAlpha = +e.target.value/100; draw(); };
+document.getElementById("zoom").oninput = e=>{ state.zoom = +e.target.value/100; fitCanvas(); draw(); };
+["alX","alY","alS"].forEach(id=>document.getElementById(id).oninput = e=>{
+  const v = +e.target.value;
+  if(id==="alX") state.align.x=v; else if(id==="alY") state.align.y=v; else state.align.s=v;
+  rec().align = {...state.align}; save(); draw();
+});
+document.getElementById("alReset").onclick = ()=>{
+  state.align = {x:0,y:0,s:100};
+  document.getElementById("alX").value=0;
+  document.getElementById("alY").value=0;
+  document.getElementById("alS").value=100;
+  rec().align = {...state.align}; save(); draw();
+};
+document.getElementById("btnDelSel").onclick = ()=>{
+  if(!state.selBuilding){ setHint("先在列表或画布上选中一座建筑"); return; }
+  erase(state.selBuilding.r, state.selBuilding.c);
+};
+document.getElementById("btnUndo").onclick = undo;
+document.getElementById("btnUndo2").onclick = undo;
+document.getElementById("btnClear").onclick = ()=>{
+  if(!confirm("清空「"+cur().name+"」上布置的全部建筑？（地形修改会保留）")) return;
+  snapshot();
+  rec().layout = [];
+  state.selBuilding=null;
+  save(); draw(); renderStats(); renderSpecs(); checkPath();
+};
+document.getElementById("btnSeedMake").onclick = ()=>{
+  const n = layoutOf().length;
+  if(!n){ document.getElementById("seedHint").textContent = "本图还没有布阵，先放几座塔。"; return; }
+  const seed = makeSeed();
+  document.getElementById("seedBox").value = seed;
+  document.getElementById("seedHint").textContent = "已生成「"+cur().name+"」的种子码，共 "+n+" 座建筑。";
+};
+document.getElementById("btnSeedCopy").onclick = async ()=>{
+  const box = document.getElementById("seedBox");
+  if(!box.value.trim()){ document.getElementById("seedHint").textContent = "请先生成或粘贴种子码。"; return; }
+  box.select();
+  try{ await navigator.clipboard.writeText(box.value); document.getElementById("seedHint").textContent = "已复制到剪贴板。"; }
+  catch(e){ document.execCommand("copy"); document.getElementById("seedHint").textContent = "已复制。"; }
+};
+document.getElementById("btnSeedLoad").onclick = ()=>{
+  const msg = loadSeed(document.getElementById("seedBox").value);
+  document.getElementById("seedHint").textContent = msg;
+};
+document.getElementById("simScore").oninput = ()=>{ renderWolfPanel(); lastWave=null; renderWave(); };
+document.getElementById("simDiff").onchange = ()=>{ renderWolfPanel(); lastWave=null; renderWave(); };
+document.getElementById("btnWave").onclick = ()=>{
+  lastWave = generateWave();
+  renderWave();
+  renderSim(null);
+  if(!lastWave) setHint("这张图没有出狼配置");
+};
+document.getElementById("btnSim").onclick = ()=>{
+  const btn = document.getElementById("btnSim");
+  btn.textContent = "模拟中…";
+  setHint("正在模拟走狼…");
+  setTimeout(()=>{
+    let res;
+    try{ res = simulateWalk(); }catch(e){ res = {err:"模拟出错："+e.message}; }
+    renderSim(res);
+    if(res && !res.err) setHint(res.leaked ? ("有 "+res.leaked+" 只狼进村") : "这波全部拦下");
+    btn.textContent = "模拟走狼";
+  }, 30);
+};
+document.getElementById("btnWaveCopy").onclick = async ()=>{
+  if(!lastWave){ setHint("先点「随机生成一波」"); return; }
+  const text = lastWave.list.map(t=>t.id).join(",");
+  try{ await navigator.clipboard.writeText(text); setHint("已复制这一波的狼（"+lastWave.total+" 只）"); }
+  catch(e){ setHint("复制失败，可手动选中：" + text.slice(0,60)); }
+};
+document.getElementById("btnHelp").onclick = ()=>{
+  alert(
+    "使用步骤\n"+
+    "1. 选地图：左上角按「第一大图 ~ 第四大图」+「大本营防线」分组，共 47 张图。\n"+
+    "2. 选塔 → 选宝石（无 / 红绿黄紫蓝黑 × 碎片晶体宝石精华强化）→ 拉等级，然后点画布格子放置。\n"+
+    "3. 右侧实时显示本图总造价、参考收入、升级经验，并检查狼路。\n"+
+    "4. 打开「最短路线」可以看到每个出狼口到羊村口的最短路线。\n"+
+    "5. 打开「攻击范围」可以看到每座塔的射程（颜色=所镶宝石颜色，虚线=被织女雕像加成后的射程）。\n"+
+    "6. 右侧「模拟出狼」可以按本图的狼、进度、波难度随机抽一波，并算出每只狼的血量。\n"+
+    "7. 布好后点「生成种子码」，把代码发给别人；别人粘贴后点「载入种子码」就能看到同样的布阵。\n\n"+
+    "规则\n"+
+    "· 狼按四方向走，不走折线；出狼口顺着箭头方向的第 1 格不能放建筑，所有出狼口一个都不能堵。\n"+
+    "· 入村口按箭头方向进村，羊村范围里的其它格子算障碍、不能建塔也不参与路线。\n"+
+    "· 入村口可以堵，但至少要留 1 个。\n"+
+    "· 传送口按颜色配对：踩到「传送入」必定被送走，只送到同色的「传送出」；\n"+
+    "  一个「传送入」对多个「传送出」时（如苏兰德城）会画出多条路线，路线在传送处断成分段。\n"+
+    "· 炮塔镶黑宝石后近处 2 格打不到（虚线小圈）；波动塔是十字贯穿，上下左右各 5 格，\n"+
+    "  途中被障碍或建筑挡住就不再往后延伸。\n\n"+
+    "更多\n"+
+    "· 只有大本营防线用「防线塔造价、经验」那套价（哨塔 300 起），其它图都是普通价（哨塔 100 起）。\n"+
+    "· 塔身上会显示等级和宝石档位缩写（如「强化」），鼠标划过能看到完整信息。\n"+
+    "· 按住 Ctrl + 左键拖动可以连续造同样配置的塔，松开左键停止（整批只算一步撤销）。\n"+
+    "· 「模拟走狼」按塔的攻击力 / 攻速 / 射程跑一遍战斗，算出这波能不能守住、\n"+
+    "  有没有狼进村、进村还剩多少血。飞行狼只能被哨塔、镶嵌塔、散弹塔打中\n"+
+    "  （炮塔、波动塔打不到；散弹塔打飞行狼伤害与效果翻倍）。\n"+
+    "  简化模型：不含抗性、护盾、召唤、隐身、传送带与技能打断。\n\n"+
+    "其他\n"+
+    "· 右键或「擦除」删除建筑；Ctrl+Z 撤销。\n"+
+    "· 格子数据来自《保卫羊村百科全书V1.82》的地图工作表。"
+  );
+};
+document.addEventListener("keydown", ev=>{
+  if(ev.key==="Escape") document.getElementById("lightbox").classList.remove("on");
+  if(ev.key==="Delete" && state.selBuilding) erase(state.selBuilding.r, state.selBuilding.c);
+  if((ev.ctrlKey||ev.metaKey) && ev.key.toLowerCase()==="z"){ ev.preventDefault(); undo(); }
+});
+window.addEventListener("resize", ()=>{ fitCanvas(); draw(); });
+
+/* ================= 启动 ================= */
+renderChapters();
+renderTowers();
+renderGems();
+renderSpecs();
+renderLegend();
+renderBrushes();
+syncLevel();
+selectMap(0);
+renderSel();
+checkPath();
+renderWolfPanel();
+renderWave();
+</script>
+</body>
+</html>
