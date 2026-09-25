@@ -191,9 +191,26 @@ def marker_type(text):
         return T_TELE_IN
     if "传送出" in text:
         return T_TELE_OUT
-    if text.startswith("\u203b"):
-        return T_MARK
+    # ※ 只是「弹簧落点」的符号标记，格子本身的性质由底色决定
+    # （落在钢网桥上的 ※ 不能布防，落在普通地面上的 ※ 可以布防），所以这里不返回 T_MARK
     return None
+
+
+"""图册里有些格子用的是 Office 主题色填充，这里给出近似的 RGB，用来给传送阵认颜色。"""
+THEME_RGB = {0: "FFFFFF", 1: "000000", 2: "E7E6E6", 3: "44546A", 4: "4472C4",
+             5: "ED7D31", 6: "A5A5A5", 7: "FFC000", 8: "5B9BD5", 9: "70AD47"}
+
+
+def fill_hex(fill):
+    fs = str(fill or "")
+    if re.fullmatch(r"[0-9A-Fa-f]{8}", fs):
+        return "#" + fs[2:]
+    if re.fullmatch(r"[0-9A-Fa-f]{6}", fs):
+        return "#" + fs
+    m = re.fullmatch(r"theme:(\d+):([\d.]+)", fs)
+    if m:
+        return "#" + THEME_RGB.get(int(m.group(1)), "888888")
+    return ""
 
 
 def parse_map(ws, block):
@@ -295,29 +312,60 @@ def parse_map(ws, block):
             used_fills.append(f)
     legend_pairs = [[legend_names[f], legend[f]] for f in used_fills]
 
+    # 金字塔是有方向性的通道：横着那截只许从左往右走，竖着那截只许从下往上走
+    pyramid = {}
+    pyr = [pos for pos, info in cells.items()
+           if info.get("fill") and legend_names.get(info["fill"]) == "\u91d1\u5b57\u5854"
+           and len(info.get("text") or "") <= 10]
+    pyr_set = set(pyr)
+    if pyr_set:
+        for (r, c) in pyr_set:
+            dirs = []
+            if (r, c - 1) in pyr_set or (r, c + 1) in pyr_set:
+                dirs.append("right")
+            if (r - 1, c) in pyr_set or (r + 1, c) in pyr_set:
+                dirs.append("up")
+            pyramid["%d_%d" % (r - r0, c - c0)] = dirs or ["right", "up"]
+
     labels = {}
     tele_fill = {}
+    feat = {}          # 每个格子的特殊地形名字（按填充色对上图例），例如 弹簧 / 钢网桥 / 有洞的钢网桥
+    marks = {}         # 格子里的符号标记，例如 ※ = 弹簧落点
+    spring = {}        # 弹簧落点里「在钢网桥上」的那部分（弹簧会把狼弹到这些格子）
     grid = []
     for r in range(r0, r1 + 1):
         row = []
         for c in range(c0, c1 + 1):
             kind = gap.get((r, c), cell_type(r, c))
             row.append(kind)
-            text = cells.get((r, c), {}).get("text")
+            info = cells.get((r, c), {})
+            text = info.get("text")
+            fill = info.get("fill")
+            pos = "%d_%d" % (r - r0, c - c0)
             if text and text != "\u203b" and len(text) <= 10:
-                labels["%d_%d" % (r - r0, c - c0)] = text
-            if kind in (T_TELE_IN, T_TELE_OUT) and cells.get((r, c), {}).get("fill"):
-                tele_fill[(r - r0, c - c0)] = cells[(r, c)]["fill"]
+                labels[pos] = text
+            # 特殊地形：同一大类（比如「只能走狼」）里还要分钢网桥 / 弹簧 / 爆炸箱……
+            if fill and legend_names.get(fill) and marker_type(text or "") is None:
+                feat[pos] = legend_names[fill]
+            if (text or "").strip() == "\u203b":
+                marks[pos] = "\u203b"
+                # 弹簧落点：落在钢网桥上的才算「正式的落点」（也不能布防）
+                if feat.get(pos) in ("钢网桥", "有洞的钢网桥"):
+                    spring[pos] = 1
+            if kind in (T_TELE_IN, T_TELE_OUT) and fill:
+                tele_fill[(r - r0, c - c0)] = fill
         grid.append("".join(str(x) for x in row))
 
     # 传送口按颜色配对：同色的传送入 → 传送出
     color_ids = {}
     tele = {}
+    tele_color = {}
     for pos in sorted(tele_fill):
         fill = tele_fill[pos]
         if fill not in color_ids:
             color_ids[fill] = len(color_ids) + 1
         tele["%d_%d" % pos] = color_ids[fill]
+        tele_color["%d_%d" % pos] = fill_hex(fill)
 
     notes = []
     for r in range(block["top"], block["bottom"] + 3):
@@ -348,10 +396,38 @@ def parse_map(ws, block):
         "grid": grid,
         "labels": labels,
         "tele": tele,
+        "teleColor": tele_color,
+        "feat": feat,
+        "marks": marks,
+        "spring": spring,
         "legend": legend_pairs,
+        "pyramid": pyramid,
         "notes": deduped,
         "edges": edges,
     }
+
+
+"""传送带方向：图册地图里的箭头是画在图上的，表里没有数据，所以按图人工核对。
+   值是 "left" / "up" / "right" / "down"；字符串表示这张图所有传送带同向，
+   字典表示按格子（"行_列"）分别指定。"""
+BELT_DIR = {
+    # 克勒蒙村：四条传送带顺时针从上往下依次是 ← ↑ → ↓（形成一圈逆时针的循环）
+    "克勒蒙村": {"2_6": "left", "2_7": "left",
+                "4_10": "up", "5_10": "up",
+                "7_6": "right", "7_7": "right",
+                "4_3": "down", "5_3": "down"},
+    "佛里特镇": "right",
+    # 泰威尔镇：上面 2 格 ↑、下面 4 格 →
+    "泰威尔镇": {"3_8": "up", "4_8": "up",
+                "6_4": "right", "6_5": "right", "6_6": "right", "6_9": "right"},
+    "香树镇": "left",
+}
+
+"""个别格子的地形和游戏里对不上时的修正表（键是「行_列」，从 0 开始；值是正确的地形编号）。
+   远古冰川 (7,8)（从 1 开始数）图册上画成了障碍，实际不是障碍，按实测改回可通行。"""
+CELL_FIX = {
+    "远古冰川": {"6_7": 1},
+}
 
 
 TOWER_DEFS = [
@@ -433,6 +509,19 @@ def read_gems():
     skills = cfg["skill"]["towerSkill"]
     towers = cfg["building"]["tower"]
     tower_name = {k: towers[k]["name"] for k in TOWER_KEYS}
+    tower_key = {towers[k]["name"]: k for k in TOWER_KEYS}
+
+    def own_skill(name, kind):
+        """塔自己技能包里的效果（例如炮塔的溅射 AoeAP）。"""
+        t = towers.get(tower_key.get(name, ""), {})
+        pid = t.get("skill")
+        if not pid or pid not in packages:
+            return None
+        for sid in packages[pid]["skills"]:
+            info = skills.get(sid)
+            if info and info["kindId"] == kind:
+                return info["params"]
+        return None
 
     def find_skill(gem, tower_key, kind):
         entry = gem["sp"].get(tower_key)
@@ -450,6 +539,9 @@ def read_gems():
         "xi": {"a": 9, "b": 2.8, "c": 0.4205, "rate": 1, "add": 0},
         "range": {tower_name[k]: 1 for k in TOWER_KEYS},
         "rangeMin": {tower_name[k]: 0 for k in TOWER_KEYS},
+        "aoe": {tower_name[k]: {"radii": (own_skill(tower_name[k], "AoeAP") or [0, 0])[0] if own_skill(tower_name[k], "AoeAP") else 0,
+                                 "rate": (own_skill(tower_name[k], "AoeAP") or [0, 0])[1] if own_skill(tower_name[k], "AoeAP") else 0}
+                for k in TOWER_KEYS},
     }]
     for key in ["hong", "lv", "huang", "zi", "lan", "hei"]:
         for tier in range(1, 6):
@@ -466,7 +558,9 @@ def read_gems():
                 }
             rates = {}
             blind = {}
+            aoe = {}
             for tk in TOWER_KEYS:
+                name = tower_name[tk]
                 rate = 1.0
                 rmin = 0
                 rp, rl = find_skill(gem, tk, "ChangeRange")
@@ -474,8 +568,13 @@ def read_gems():
                     rate = 1 + rp[1] * rl
                     if len(rp) > 3 and rp[3] and rp[3] > 0:
                         rmin = rp[3] / 1000.0      # 无法攻击近处（近处盲区，单位：格）
-                rates[tower_name[tk]] = round(rate, 4)
-                blind[tower_name[tk]] = round(rmin, 3)
+                rates[name] = round(rate, 4)
+                blind[name] = round(rmin, 3)
+                # 溅射：宝石的技能包会顶掉塔自己的（例如黑宝石强化炮塔的溅射）
+                ap, _lv = find_skill(gem, tk, "AoeAP")
+                if not ap:
+                    ap = own_skill(name, "AoeAP")
+                aoe[name] = {"radii": (ap[0] if ap else 0), "rate": (ap[1] if ap and len(ap) > 1 else 0)}
             out.append({
                 "id": "%s%d" % (key, tier),
                 "name": gem["name"],
@@ -488,6 +587,7 @@ def read_gems():
                 "xi": xi,
                 "range": rates,
                 "rangeMin": blind,
+                "aoe": aoe,
             })
     return out
 
@@ -599,6 +699,10 @@ def read_gem_effects(wb):
             m2 = re.search(r"(\d+)%几率超长距离击退", t)
             if m2:
                 out.setdefault("knock", {}).setdefault(tower, {})[tier] = float(m2.group(1))/100
+        t = text_of(r, 5)                      # 紫宝石镶嵌塔：闪电弹射
+        m2 = re.search(r"闪电弹射(\d+)次，伤害递减(\d+)%", t)
+        if m2:
+            out.setdefault("chain", {})[tier] = {"n": int(m2.group(1)), "dec": float(m2.group(2))/100}
 
     # 镶嵌塔的冰霜减速：表里按等级给出（1~30 在 J~N，31~60 在 P~T）
     xq_cols = [(10, 1), (11, 2), (12, 3), (13, 4), (14, 5)]
@@ -642,8 +746,10 @@ def read_wolf_skills():
         p = info.get("params")
         return p[0] if isinstance(p, list) and p else None
 
-    RES = ("resistFrost", "resistLight", "resistPoison", "resistVertigo", "resistFire")
-    WEAK = ("weakFrost", "weakLight", "weakPoison", "weakVertigo", "weakFire")
+    RES = ("resistFrost", "resistLight", "resistPoison", "resistVertigo", "resistFire",
+           "resistSilence", "resistCrit", "resistBeat")
+    WEAK = ("weakFrost", "weakLight", "weakPoison", "weakVertigo", "weakFire",
+            "weakSilence", "weakCrit", "weakBeat")
     out = {}
     for wid, w in cfg["wolfs"].items():
         rec = {}
@@ -671,6 +777,41 @@ def read_wolf_skills():
                 rec[kind] = 1
         if rec:
             out[wid] = rec
+    return out
+
+
+def read_wolf_skill_list():
+    """每只狼的技能清单（带等级参数），给走狼模拟的技能时钟用。
+
+    数据来自游戏配置的怪物技能表：每个技能有 kindId（技能种类）与 levels（各等级的参数行）。
+    返回 {狼id: [{"k": 种类, "n": 名字, "lv": 等级, "p": 该等级的参数行}, ...]}
+    抗性 / 怕性两类不重复放进这里（它们已经在 wolfSkill 里合并好了）。"""
+    import json
+
+    src = os.path.join(PROJ, "tdsheepvillage-view-master", "src", "assets", "sys_config.json")
+    if not os.path.exists(src):
+        return {}
+    cfg = json.load(open(src, encoding="utf-8"))
+    ms = cfg["skill"]["monsterSkill"]
+    skip = ("resist", "weak")
+    out = {}
+    for wid, w in cfg["wolfs"].items():
+        lst = []
+        for s in (w.get("skills") or []):
+            info = ms.get(s.get("skid"))
+            if not info:
+                continue
+            kind = info.get("kindId") or ""
+            if kind.startswith(skip):
+                continue
+            levels = info.get("levels") or []
+            lv = max(1, int(s.get("lev", 1) or 1))
+            row = None
+            if levels and isinstance(levels[0], list):
+                row = levels[min(lv, len(levels)) - 1]
+            lst.append({"k": kind, "n": info.get("name") or "", "lv": lv, "p": row})
+        if lst:
+            out[wid] = lst
     return out
 
 
@@ -797,6 +938,8 @@ def read_wolves():
             "pop": w.get("pop", 1),
             "speed": w.get("speed"),
             "defense": w.get("defense"),
+            # 体型：宽 × 高 ≥ 487500 算「沉重」，不受弹簧影响；轻的会被弹簧弹到落点
+            "w": w.get("width"), "h": w.get("height"),
             # 带 Fly_* 技能的狼会飞：炮塔、波动塔打不到；散弹塔打它伤害与效果翻倍
             "fly": any(str(s.get("skid", "")).startswith("Fly") for s in (w.get("skills") or [])),
         }
@@ -943,6 +1086,11 @@ def main():
             "section": "defend" if block["top"] >= 584 else "front",
             "img": None,
             "refs": [],
+            "feat": {},
+            "marks": {},
+            "spring": {},
+            "belt": {},
+            "teleColor": {},
             "income": None,
             **parsed,
         })
@@ -959,6 +1107,8 @@ def main():
             continue
         m["no"] = i + 1
         m["chapter"] = 1 if i < 11 else (2 if i < 25 else (3 if i < 37 else 4))
+        # 村口规则：拉帕斯村两个村口都不能堵，其它图至少留 1 个
+        m["villageRule"] = "all" if name == "\u62c9\u5e15\u65af\u6751" else "one"
         m["order"] = i
         ordered.append(m)
     for name in EXTRA_MAPS:
@@ -974,7 +1124,9 @@ def main():
 
     anchors = read_drawing_anchors()
     export_images(anchors, maps, name_rows)
-    export_references(maps)
+    # 布局参考图（refs/）在工具里用不上，分享包里也不需要，所以不再导出。
+    # 需要的话把下面这行取消注释即可重新生成。
+    # export_references(maps)
     # 大本营防线与 38 号「防线」是同一张图，参考收入沿用
     twin = next((m for m in maps if m["name"] == "防线"), None)
     extra = next((m for m in maps if m["name"] == "大本营防线"), None)
@@ -988,6 +1140,24 @@ def main():
         if cfg is None and m["name"] == "大本营防线":
             cfg = map_wolf.get("防线")
         m["wolf"] = cfg
+        # 传送带方向（人工核对表）
+        rule = BELT_DIR.get(m["name"])
+        if rule:
+            belt = {}
+            for pos, fname in (m.get("feat") or {}).items():
+                if fname != "传送带":
+                    continue
+                d = rule if isinstance(rule, str) else rule.get(pos)
+                if d:
+                    belt[pos] = d
+            m["belt"] = belt
+        # 个别格子的地形修正
+        for pos, t in (CELL_FIX.get(m["name"]) or {}).items():
+            rr, cc = [int(x) for x in pos.split("_")]
+            row = m["grid"][rr]
+            if cc < len(row):
+                m["grid"][rr] = row[:cc] + str(t) + row[cc+1:]
+                m.get("feat", {}).pop(pos, None)
 
     front = read_table(wb, "各种塔造价、攻击力", TOWER_DEFS)
     defend = read_table(wb, "防线塔造价、经验", TOWER_DEFS,
@@ -1009,6 +1179,7 @@ def main():
         "crossRange": CROSS_RANGE,
         "wolfs": wolfs,
         "wolfSkill": read_wolf_skills(),
+        "wolfSkills": read_wolf_skill_list(),
         "waveDiff": wave_diff,
         "gemEffect": read_gem_effects(wb),
         "special": read_special(wb),

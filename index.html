@@ -76,6 +76,7 @@
   <button id="btnHelp" class="ghost">使用说明</button>
   <button id="btnUndo" class="ghost">撤销</button>
   <button id="btnClear" class="ghost">清空本图</button>
+  <button id="btnResetAll" class="ghost">全部重置</button>
 </header>
 
 <main>
@@ -84,6 +85,33 @@
     <div class="row" id="chapterTabs"></div>
     <div class="row" id="mapList" style="margin-top:6px;max-height:168px;overflow:auto"></div>
     <div class="note" id="mapBrief" style="margin-top:5px"></div>
+
+    <div id="customBox" style="display:none">
+      <h2>自定义地图</h2>
+      <div class="slider">
+        <span class="note" style="width:34px">列</span>
+        <input type="number" id="cusCols" min="4" max="30" value="12" style="width:66px">
+        <span class="note" style="width:34px">行</span>
+        <input type="number" id="cusRows" min="4" max="30" value="10" style="width:66px">
+        <button class="chip" id="cusApply">应用</button>
+      </div>
+      <div class="note" style="margin-top:4px">
+        先用「改地形」画笔点格子：放 出狼口 / 羊村入口 / 障碍 / 传送口 等；
+        默认整张图都是「可通行 / 可建塔」。换尺寸会清空已画的地形。
+      </div>
+      <div class="row" style="margin-top:4px">
+        <button class="chip" id="cusFill">全填成可建塔</button>
+        <button class="chip" id="cusAuto">自动摆出入口</button>
+      </div>
+      <div class="slider" style="margin-top:4px">
+        <span class="note" style="width:44px">名字</span>
+        <input type="text" id="cusName" maxlength="12" style="flex:1 1 90px" placeholder="给这张图起个名字">
+      </div>
+      <div class="row" style="margin-top:4px">
+        <button class="chip" id="cusNew">新建一张自定义地图</button>
+        <button class="chip" id="cusRename">改名</button>
+      </div>
+    </div>
 
     <h2>图例 · 地图说明</h2>
     <div class="note" style="margin-bottom:4px">鼠标划过格子会显示该格的具体类型与标注。</div>
@@ -109,6 +137,13 @@
 
     <h2>当前选择</h2>
     <div class="info" id="selInfo"></div>
+    <div class="row" style="margin-top:6px;align-items:center">
+      <label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+        <input type="checkbox" id="autoApply" checked> 改参数直接套用到选中的建筑
+      </label>
+    </div>
+    <div class="note" style="margin-top:4px">点地图上已有建筑 = 选中它并把「塔 / 宝石 / 等级」同步到左边，
+      之后在左边改就直接套用到它（方便连着调好几座）。按住 Shift 点建筑 = 用当前配置覆盖它。</div>
 
     <h2>鼠标工具</h2>
     <div class="row" id="toolList">
@@ -124,6 +159,7 @@
     <div class="row">
       <button class="chip" id="tgBase">地图底图</button>
       <button class="chip" id="tgPath">走狼路线</button>
+      <button class="chip" id="tgFly">飞行路线</button>
       <button class="chip" id="tgRange">攻击范围</button>
       <button class="chip" id="tgGrid">格子编号</button>
     </div>
@@ -172,6 +208,21 @@
     <h2>模拟出狼 · 走狼预测</h2>
     <div class="info">
       <div id="wolfTags" class="row" style="gap:4px"></div>
+      <div id="customWolfBox" style="display:none;margin-top:6px">
+        <div class="row">
+          <select id="cwSelect" style="flex:1 1 120px"></select>
+          <input type="number" id="cwHp" placeholder="血量" value="1000" style="width:88px">
+          <input type="number" id="cwN" placeholder="只数" value="1" min="1" max="50" style="width:60px">
+          <button class="chip" id="cwAdd">加入</button>
+          <button class="chip" id="cwClear">清空狼</button>
+        </div>
+        <div id="cwList" class="note" style="margin-top:4px"></div>
+        <div class="slider" style="margin-top:4px">
+          <span class="note" style="width:64px">进度上限</span>
+          <input type="number" id="cwScore" min="1" value="100" style="width:88px">
+          <button class="chip" id="cwScoreApply">应用</button>
+        </div>
+      </div>
       <div class="slider" style="margin-top:8px">
         <span class="note" style="width:52px">进度</span>
         <input type="number" id="simScore" min="0" step="50" value="0" style="width:82px">
@@ -184,11 +235,19 @@
       <div class="kv" style="margin-top:6px"><span>狼等级 L</span><b id="simLevel">—</b></div>
       <div class="kv"><span>本图狼血量</span><span id="simHpList" class="note"></span></div>
       <div class="row" style="margin-top:6px">
+        <button class="chip" id="btnBoss">生成随机boss</button>
         <button class="chip" id="btnWave">随机生成一波</button>
-        <button class="chip" id="btnWaveCopy">复制波</button>
         <button class="chip" id="btnSim">模拟走狼</button>
+        <select id="simSpeed" title="动画倍速">
+          <option value="1">1×</option>
+          <option value="2" selected>2×</option>
+          <option value="4">4×</option>
+          <option value="8">8×</option>
+          <option value="16">16×</option>
+        </select>
       </div>
       <div id="waveResult" class="note" style="margin-top:6px"></div>
+      <div id="bossResult" class="note" style="margin-top:6px"></div>
       <div id="simResult" style="margin-top:8px"></div>
     </div>
     </div>
@@ -213,11 +272,34 @@
     </div>
     <div class="note" id="seedHint" style="margin-top:4px"></div>
 
+    <h2>更新</h2>
+    <div class="note" id="updSrc" style="word-break:break-all"></div>
+    <div class="row" style="margin-top:5px">
+      <button class="chip" id="updCheck">检查更新</button>
+      <button class="chip" id="updOpen" style="display:none">打开下载页</button>
+      <button class="chip" id="updFiles" style="display:none">下载新版文件</button>
+    </div>
+    <div class="note" id="updInfo" style="margin-top:4px">点「检查更新」可以看有没有新版；离线使用不受影响。</div>
+
   </aside>
 </main>
 
 <div id="lightbox"><img id="lightImg" alt=""></div>
 
+<script>
+/* ---------------- 版本 / 自动更新 ----------------
+   发布新版本时：把这里的版本号 + 同目录的 version.json 一起改成新版本号再上传即可。 */
+window.YC_LOCAL_VERSION = "1.1";
+/* 版本号比较：1.10 > 1.9 */
+window.YC_NEWER = function(a, b){
+  var pa = String(a).split("."), pb = String(b).split(".");
+  for(var i=0;i<Math.max(pa.length,pb.length);i++){
+    var x = parseInt(pa[i],10)||0, y = parseInt(pb[i],10)||0;
+    if(x !== y) return x > y;
+  }
+  return false;
+};
+</script>
 <script src="data.js"></script>
 <script>
 "use strict";
@@ -228,6 +310,40 @@ const TOWER_ORDER = D.towers.map(t=>t.name);
 const MAXLV = D.towerMax;
 const STORE_KEY = "yangcun-buzhen-v1";
 const CHAPTER_NAME = {1:"第一大图",2:"第二大图",3:"第三大图",4:"第四大图",0:"大本营防线"};
+const CUSTOM_NAME = "我的自定义地图";
+/* 自定义地图：可以建多张、改名，尺寸 / 出入口 / 出狼都可以自己定。
+   地图设置存在 state.data.customMaps 里，地形与建筑沿用每个地图名的存档。 */
+function customDefs(){
+  if(!Array.isArray(state.data.customMaps) || !state.data.customMaps.length){
+    state.data.customMaps = [{ name:CUSTOM_NAME, cols:12, rows:10, labels:{}, scoreMax:100, wolves:[] }];
+  }
+  return state.data.customMaps;
+}
+function customDef(m){
+  return customDefs().find(d=>d.name === (m||cur()).name) || null;
+}
+function customMapRecord(name){
+  if(!state.data.maps[name]) state.data.maps[name] = {layout:[], terrain:{}, align:{x:0,y:0,s:100}};
+  return state.data.maps[name];
+}
+/* 按自定义列表重建地图条目 */
+function ensureCustomMaps(){
+  const defs = customDefs();
+  D.maps = D.maps.filter(x=>!x.custom);
+  defs.forEach(def=>{
+    customMapRecord(def.name);
+    D.maps.push({
+      custom:true, no:null, chapter:-1, name:def.name, section:"front",
+      cols:def.cols, rows:def.rows,
+      grid:Array.from({length:def.rows}, ()=>"1".repeat(def.cols)),
+      labels:Object.assign({}, def.labels||{}), tele:{}, legend:[], notes:[], pyramid:{},
+      edges:[], refs:[], img:null,
+      wolf:{ gameId:"custom", popMax:10, hardA:0, hardB:0, scoreMax:def.scoreMax||100,
+             prop:[], boss:[], randomBoss:[], custom:true },
+    });
+  });
+  save();
+}
 const ARROWS = {"→":[0,1], "←":[0,-1], "↑":[-1,0], "↓":[1,0]};
 const GEM_COLORS = [0,1,3,2,5,4,6];      // 无、红、绿、黄、紫、蓝、黑
 const GEM_TIERS  = [1,2,3,4,5];
@@ -240,7 +356,8 @@ const state = {
   tool: "build",
   brush: 1,
   selBuilding: null,
-  showBase:false, showPath:false, showRange:false, showGrid:false,
+  autoApply: true,          // 改动左边参数时，是否直接套用到选中的建筑
+  showBase:false, showPath:false, showFly:true, showRange:false, showGrid:false,
   zoom:1, rangeAlpha:0.22,
   align:{x:0,y:0,s:100},
   data: load(),
@@ -359,15 +476,16 @@ function axisCells(r,c,dist){
   return out;
 }
 function statueBuff(r,c){
-  let atk=1, range=1;
+  let atk=1, range=1, rate=1;
   layoutOf().forEach(b=>{
     if(b.kind!=="special") return;
-    if(b.spec!=="牛郎雕像" && b.spec!=="织女雕像") return;
+    if(b.spec!=="牛郎雕像" && b.spec!=="织女雕像" && b.spec!=="盘龙柱") return;
     if(!axisCells(b.r,b.c,2).some(([rr,cc])=>rr===r&&cc===c)) return;
     if(b.spec==="牛郎雕像") atk = 1.2;
-    else range = 1.2;
+    else if(b.spec==="织女雕像") range = 1.2;
+    else rate *= 1.15;                       // 盘龙柱：+15% 攻速
   });
-  return {atk, range};
+  return {atk, range, rate};
 }
 
 /* ================= 画布 ================= */
@@ -389,6 +507,138 @@ function fitCanvas(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 function cellCenter(r,c){ return [PAD + (c+.5)*CELL, PAD + (r+.5)*CELL]; }
+/* 特殊地形画法：同一大类（比如「可以走狼」）里再按名字区分，
+   相似的地形用近似的符号（钢网桥 = 灰色方格 / 有洞的钢网桥 = 灰色方格加圈），
+   完全不同的地形用不同颜色和符号（爆炸箱 = 红 X / 传送带 = 浅黄箭头）。 */
+const FEATURE_STYLE = {
+  "弹簧":        {sym:"X",  color:"#b3261e", kind:"x"},
+  "\u203b":      {sym:"\u24e7", color:"#b3261e", kind:"circle-x"},   // ※ = 弹簧落点
+  "爆炸箱":      {sym:"X",  color:"#c62828", kind:"x"},
+  "传送带":      {sym:"\u25b6", color:"#b58900", kind:"belt"},
+  "钢网桥":      {sym:"\u25a2", color:"#7b8794", kind:"grid"},
+  "有洞的钢网桥":{sym:"\u25ef", color:"#7b8794", kind:"hole"},
+  "核电厂":      {sym:"\u2622", color:"#2e7d32", kind:"text"},
+  "反应炉":      {sym:"\u25c9", color:"#2e7d32", kind:"text"},
+  "熔岩沟":      {sym:"\u2248", color:"#d84315", kind:"text"},
+  "火山":        {sym:"\u25b2", color:"#d84315", kind:"text"},
+  "火山盆地":    {sym:"\u25bd", color:"#d84315", kind:"text"},
+  "火山盆地边缘":{sym:"\u25ab", color:"#d84315", kind:"text"},
+  "石板路":      {sym:"\u25a4", color:"#8d6e63", kind:"text"},
+  "桥":          {sym:"\u2550", color:"#8d6e63", kind:"text"},
+  "河岸与桥":    {sym:"\u2248", color:"#3f74d0", kind:"text"},
+  "峡谷与桥":    {sym:"\u2261", color:"#8d6e63", kind:"text"},
+  "铁路":        {sym:"\u2261", color:"#5f6b73", kind:"text"},
+  "带棚铁路段":  {sym:"\u25ac", color:"#5f6b73", kind:"text"},
+  "雪山地洞":    {sym:"\u25cd", color:"#37474f", kind:"text"},
+  "雪山走道":    {sym:"\u2591", color:"#78909c", kind:"text"},
+  "沼地":        {sym:"\u224b", color:"#4e6e3a", kind:"text"},
+  "障碍":        {sym:"\u25a8", color:"#546e7a", kind:"text"},
+  "特殊塔位":    {sym:"\u25b2", color:"#6a4fa3", kind:"text"},
+  "毒增强塔位":  {sym:"\u2620", color:"#6a9a3a", kind:"text"},
+  "雕像周围区":  {sym:"\u25cb", color:"#d9a53f", kind:"text"},
+  "雕像":        {sym:"\u2605", color:"#d9a53f", kind:"text"},
+  "金字塔":      {sym:"\u25c6", color:"#a1887f", kind:"text"},
+};
+function featureStyle(name){
+  return FEATURE_STYLE[name] || {sym:(name||"?").slice(0,1), color:"#78909c", kind:"text"};
+}
+/* 把图册里的填充色认成一个中文颜色名，给传送阵配对用 */
+function colorNameOf(hex){
+  if(!hex) return "";
+  const h = hex.replace("#","");
+  const r = parseInt(h.slice(0,2),16)/255, g = parseInt(h.slice(2,4),16)/255, b = parseInt(h.slice(4,6),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max-min;
+  if(d < 0.12) return max > 0.75 ? "白" : (max < 0.35 ? "黑" : "灰");
+  let hue;
+  if(max === r) hue = ((g-b)/d + (g<b?6:0)) * 60;
+  else if(max === g) hue = ((b-r)/d + 2) * 60;
+  else hue = ((r-g)/d + 4) * 60;
+  if(hue < 15 || hue >= 345) return "红";
+  if(hue < 45) return "橙";
+  if(hue < 70) return "黄";
+  if(hue < 160) return "绿";
+  if(hue < 200) return "青";
+  if(hue < 255) return "蓝";
+  if(hue < 290) return "紫";
+  return "粉";
+}
+/* 本图传送口的配对：按数据里的配对编号分组，颜色认得出就叫颜色名，认不出就叫「第 N 组」 */
+function teleportGroups(m){
+  const g = {};
+  for(const key in (m.tele||{})){
+    const [r,c] = key.split("_").map(Number);
+    const t = cellType(m,r,c);
+    if(t !== 4 && t !== 5) continue;
+    const id = m.tele[key];
+    const rec = g[id] = g[id] || {in:[], out:[], colorName:"", hex:""};
+    (t===4 ? rec.in : rec.out).push([r,c]);
+    const hex = (m.teleColor||{})[key] || "";
+    if(/^#[0-9a-fA-F]{6}$/.test(hex)){ rec.hex = hex; rec.colorName = colorNameOf(hex); }
+  }
+  Object.keys(g).forEach((id,i)=>{
+    g[id].name = "第" + (i+1) + "组";
+    g[id].label = g[id].name + (g[id].colorName ? "（" + g[id].colorName + "）" : "");
+  });
+  return g;
+}
+/* 某一格属于哪个传送组 */
+function teleGroupOf(m, r, c){
+  const id = (m.tele||{})[r+"_"+c];
+  if(id == null) return null;
+  return teleportGroups(m)[id] || null;
+}
+/* 在格子上画一个特殊地形符号 */
+function drawFeatureMark(r, c, name, mark, dir){
+  const st = featureStyle(mark || name);
+  const [cx, cy] = cellCenter(r, c);
+  const s = CELL*0.3;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, state.showBase ? 0.95 : 0.9);
+  if(st.kind === "belt"){                        // 传送带：浅黄色底 + 方向箭头
+    ctx.fillStyle = "#fff3b0cc";
+    ctx.fillRect(PAD + c*CELL + 1, PAD + r*CELL + 1, CELL-2, CELL-2);
+    ctx.fillStyle = "#8a6d00";
+    const rot = {right:0, down:Math.PI/2, left:Math.PI, up:-Math.PI/2}[dir || "right"];
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(rot);
+    ctx.beginPath();
+    ctx.moveTo(s*0.5, 0);
+    ctx.lineTo(-s*0.5, -s*0.45);
+    ctx.lineTo(-s*0.5, s*0.45);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }else if(st.kind === "grid"){                  // 钢网桥：灰色方格
+    ctx.fillStyle = "#b9c0c6ee";
+    ctx.fillRect(PAD + c*CELL + 2, PAD + r*CELL + 2, CELL-4, CELL-4);
+    ctx.strokeStyle = "#5b656d"; ctx.lineWidth = Math.max(1, CELL*0.05);
+    ctx.strokeRect(PAD + c*CELL + 2.5, PAD + r*CELL + 2.5, CELL-5, CELL-5);
+  }else if(st.kind === "hole"){                  // 有洞的钢网桥：同色方格 + 中间一个圈
+    ctx.fillStyle = "#b9c0c6ee";
+    ctx.fillRect(PAD + c*CELL + 2, PAD + r*CELL + 2, CELL-4, CELL-4);
+    ctx.strokeStyle = "#2f383e"; ctx.lineWidth = Math.max(1.2, CELL*0.06);
+    ctx.beginPath(); ctx.arc(cx, cy, s*0.62, 0, Math.PI*2); ctx.stroke();
+  }else if(st.kind === "x"){                     // 弹簧 / 爆炸箱：一个 X
+    ctx.strokeStyle = st.color; ctx.lineWidth = Math.max(2, CELL*0.11);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy + s);
+    ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx - s, cy + s);
+    ctx.stroke();
+  }else if(st.kind === "circle-x"){              // 弹簧落点：ⓧ
+    ctx.strokeStyle = st.color; ctx.lineWidth = Math.max(1.6, CELL*0.08);
+    ctx.beginPath(); ctx.arc(cx, cy, s*0.92, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - s*0.5, cy - s*0.5); ctx.lineTo(cx + s*0.5, cy + s*0.5);
+    ctx.moveTo(cx + s*0.5, cy - s*0.5); ctx.lineTo(cx - s*0.5, cy + s*0.5);
+    ctx.stroke();
+  }else{                                         // 其它：画一个符号
+    ctx.fillStyle = st.color;
+    ctx.font = "bold "+Math.round(CELL*0.5)+"px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(st.sym, cx, cy);
+  }
+  ctx.restore();
+}
 
 function draw(){
   const m = cur(), R = rec(m);
@@ -418,6 +668,18 @@ function draw(){
   }
   ctx.globalAlpha = 1;
 
+  // 特殊地形符号（弹簧、弹簧落点、钢网桥、有洞的钢网桥、爆炸箱、传送带……）
+  for(const key in (m.feat||{})){
+    const [r,c] = key.split("_").map(Number);
+    if(r>=m.rows || c>=m.cols) continue;
+    drawFeatureMark(r, c, m.feat[key], null, (m.belt||{})[key]);
+  }
+  for(const key in (m.marks||{})){
+    const [r,c] = key.split("_").map(Number);
+    if(r>=m.rows || c>=m.cols) continue;
+    drawFeatureMark(r, c, null, m.marks[key]);
+  }
+
   (m.edges||[]).forEach(e=>{
     ctx.fillStyle = e.kind===2 ? COLORS[2] : COLORS[3];
     const s = CELL*0.5;
@@ -428,6 +690,52 @@ function draw(){
     else { x = PAD + e.pos*CELL + (CELL-s)/2; y = PAD + m.rows*CELL; }
     ctx.fillRect(x,y,s,s);
   });
+  // 出入口的方向箭头（和百科地图一样：→羊村 / 入口↓）
+  const drawArrow = (r, c, text)=>{
+    const dir = arrowOf(text);
+    if(!dir) return;
+    const ch = Object.keys(ARROWS).find(k=>ARROWS[k]===dir);
+    const [cx,cy] = cellCenter(r, c);
+    const fs = Math.round(CELL*0.5);
+    ctx.font = "bold "+fs+"px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = Math.max(2, CELL*0.08);
+    ctx.strokeStyle = "#0d1215dd";
+    ctx.strokeText(ch, cx, cy);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(ch, cx, cy);
+  };
+  for(const key in (m.labels||{})){
+    const [r,c] = key.split("_").map(Number);
+    if(r>=m.rows || c>=m.cols) continue;
+    const t = m.labels[key];
+    if(t.indexOf("入口") < 0 && t.indexOf("羊村") < 0) continue;
+    drawArrow(r, c, t);
+  }
+  // 金字塔通道的方向（横着只许往右、竖着只许往上），和百科地图一样标在格子上
+  for(const key in (m.pyramid||{})){
+    const [r,c] = key.split("_").map(Number);
+    if(r>=m.rows || c>=m.cols) continue;
+    const dirs = m.pyramid[key] || [];
+    const [cx,cy] = cellCenter(r, c);
+    const fs = Math.round(CELL*0.34);
+    ctx.font = "bold "+fs+"px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = Math.max(2, CELL*0.06);
+    ctx.strokeStyle = "#0d1215dd";
+    const glyphs = [];
+    if(dirs.indexOf("right") >= 0) glyphs.push("→");
+    if(dirs.indexOf("up") >= 0) glyphs.push("↑");
+    if(glyphs.length){
+      const dx = glyphs.length > 1 ? CELL*0.22 : 0;
+      glyphs.forEach((g,i)=>{
+        const x = cx + (i===0 ? -dx : dx) * (glyphs.length>1?1:0);
+        ctx.strokeText(g, x, cy);
+        ctx.fillStyle = "#ffe066";
+        ctx.fillText(g, x, cy);
+      });
+    }
+  }
 
   // 攻击范围（在建筑下面画）
   if(state.showRange){
@@ -475,11 +783,12 @@ function draw(){
     });
   }
 
-  // 最短路线
-  if(state.showPath){
-    ctx.strokeStyle = "#ffee58"; ctx.lineWidth = Math.max(2,CELL*0.12);
+  // 走狼路线（地面狼）；飞行路线单独画一条虚线，飞行狼会穿障碍与建筑
+  const drawRoutes = (paths, color, dash)=>{
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(2,CELL*(dash?0.09:0.12));
     ctx.lineCap="round"; ctx.lineJoin="round";
-    shortestPaths().forEach(item=>{
+    ctx.setLineDash(dash ? [Math.max(4,CELL*0.3), Math.max(3,CELL*0.22)] : []);
+    paths.forEach(item=>{
       pathSegments(item.path).forEach(seg=>{
         ctx.beginPath();
         seg.forEach(([r,c],i)=>{
@@ -489,6 +798,28 @@ function draw(){
         ctx.stroke();
       });
     });
+    ctx.setLineDash([]);
+  };
+  if(state.showPath) drawRoutes(shortestPaths(false), "#ffee58", false);
+  if(state.showFly && mapHasFlyer(m)){
+    const fa = flyAlternates(m);
+    ctx.save(); ctx.globalAlpha = 0.32;                 // 备选路线（等长的几条）淡一点
+    fa.alts.forEach(list=>list.slice(1).forEach(p=>drawRoutes([{path:p}], "#63d2ff", true)));
+    ctx.restore();
+    drawRoutes(fa.base, "#63d2ff", true);               // 最短路参考线
+  }
+  // 播放动画时，把这一波狼真正走的路线也淡淡画出来
+  // （飞行狼每次模拟会在等长的几条路里随机挑一条，所以和上面那条参考线可能略有不同）
+  if(playback && playback.res && playback.res.wolves){
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    const seen = new Set();
+    playback.res.wolves.forEach(w=>{
+      if(seen.has(w.route)) return;
+      seen.add(w.route);
+      drawRoutes([{path:w.route}], w.fly ? "#63d2ff" : "#ffee58", !!w.fly);
+    });
+    ctx.restore();
   }
 
   R.layout.forEach(b=>{
@@ -525,6 +856,40 @@ function draw(){
       ctx.fillText(b.r+","+b.c, PAD+b.c*CELL+3, PAD+b.r*CELL+2);
     }
   });
+
+  // 播放动画时：被乌云 / 自爆罩住的塔画成纯灰色（这期间它不攻击）
+  if(playback && playback.frame && playback.frame.cloud){
+    playback.frame.cloud.forEach(cell=>{
+      const [x,y] = cellCenter(cell[0], cell[1]);
+      ctx.beginPath(); ctx.arc(x, y, CELL*0.42, 0, Math.PI*2);
+      ctx.fillStyle = "#9aa0a6"; ctx.fill();
+      ctx.strokeStyle = "#5f666c"; ctx.lineWidth = 2; ctx.stroke();
+    });
+  }
+
+  // 跟随光标的「当前选中塔」预览（在光标右上方）
+  drawWolves();
+  if(state.tool === "build" && mousePos && state.sel.kind === "tower"){
+    const px = Math.min(cv.width - CELL*0.5, mousePos.x + CELL*0.55);
+    const py = Math.max(CELL*0.5, mousePos.y - CELL*0.55);
+    const g = gemById(state.sel.gem);
+    const rad = Math.max(15, CELL*0.45);
+    ctx.globalAlpha = 0.92;
+    ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI*2);
+    ctx.fillStyle = g.hex; ctx.fill();
+    ctx.strokeStyle = "#ffffffee"; ctx.lineWidth = 2; ctx.stroke();
+    const txt = (t, y, size, fill)=>{
+      ctx.font = "bold "+Math.round(size)+"px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000000cc";
+      ctx.strokeText(t, px, y);
+      ctx.fillStyle = fill; ctx.fillText(t, px, y);
+    };
+    txt(state.sel.tower, py - rad*0.6, rad*0.62, "#ffffffdd");
+    txt(String(state.sel.level), py - rad*0.02, rad*0.86, "#ffffff");
+    txt(g.tier ? TIER_NAME[g.tier] : "无", py + rad*0.55, rad*0.52, "#ffffff");
+    ctx.globalAlpha = 1;
+  }
 }
 function hexA(hex, a){
   const h = (hex||"#888888").replace("#","");
@@ -542,16 +907,83 @@ function blocksWave(m,r,c){
 }
 
 /* ================= 连通性 / 路线 ================= */
-const WALK_TYPES = new Set([1,4,5,7,8,2]);     // 狼可以站的格子（羊村格单独判断）
+// 狼可以站的格子：出狼口(2)本身不能走 —— 游戏里狼是在出狼口前一格生成的
+const WALK_TYPES = new Set([1,4,5,7,8]);
 const BUILD_TYPES = new Set([1,6,8]);          // 可以盖建筑的格子
 const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];      // 四方向，不走折线
 
 function isVillageIn(m,r,c){                   // 羊村里带标注的那格才是入村口
   return cellType(m,r,c)===3 && !!(m.labels||{})[r+"_"+c];
 }
-function walkable(m,r,c,withBuildings){
+/* ---------- 飞行高度模型 ----------
+   飞行狼自己的高度是 1100（技能表 Fly_Z6）。每格有一个「空中高度」= 地形高度 + 建筑高度，
+   超过 1100 就飞不过去、只能绕开：
+   · 与地图边缘连成一片的不可通过地形 = 外围高山（远高于 1100，绝对飞不过去）
+   · 地图内部的不可通过地形 = 矮障碍（200，可以直接飞过）
+   · 特殊塔位（只能建塔的格子）本身垫高 400，在上面放高塔就可能超过 1100
+   · 塔高用游戏配置里的 bHeight：波动塔 200 / 哨塔 600 / 炮塔 750 / 散弹塔 800 / 镶嵌塔 800，
+     雕像、墙按 300 算；金字塔对飞行单位算障碍物
+   · 密集的低建筑区（比如一片波动塔、哨塔）高度仍然低于 1100，飞行狼会顺着这些地方走 */
+const FLY_HEIGHT = 1100;
+const TOWER_HEIGHT = {哨塔:600, 散弹塔:800, 炮塔:750, 波动塔:200, 镶嵌塔:800};
+const SPEC_HEIGHT = 300, PLATFORM_HEIGHT = 400, TERRAIN_OUTER = 99999, TERRAIN_INNER = 200;
+function buildingHeight(b){
+  if(b.kind === "special") return SPEC_HEIGHT;
+  return TOWER_HEIGHT[b.tower] || 600;
+}
+/* 与地图边缘连通的不可通过地形 = 外围高山 */
+function outerImpassable(m){
+  const rows = m.rows, cols = m.cols, seen = new Uint8Array(rows*cols), q = [];
+  const push = (r,c)=>{
+    if(r<0||c<0||r>=rows||c>=cols) return;
+    const i = r*cols+c;
+    if(seen[i] || cellType(m,r,c) !== 0) return;
+    seen[i] = 1; q.push([r,c]);
+  };
+  for(let c=0;c<cols;c++){ push(0,c); push(rows-1,c); }
+  for(let r=0;r<rows;r++){ push(r,0); push(r,cols-1); }
+  for(let k=0;k<q.length;k++){
+    const [r,c] = q[k];
+    push(r+1,c); push(r-1,c); push(r,c+1); push(r,c-1);
+  }
+  return seen;
+}
+/* 飞行用的高度图：blocked[i] = 1 表示这格飞不过去 */
+/* 这些地形是高耸的建筑/构造物，飞狼也过不去（百科里写「无法走狼」，实际连飞也挡） */
+const AIR_BLOCK_FEATURES = new Set(["核电厂", "反应炉", "火山"]);
+function airMap(m, rand){
+  const rows = m.rows, cols = m.cols;
+  const outer = outerImpassable(m), blocked = new Uint8Array(rows*cols);
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const i = r*cols+c, t = cellType(m,r,c);
+    if(t===2 || (t===3 && !isVillageIn(m,r,c)) || pyramidKind(m,r,c)){ blocked[i] = 1; continue; }
+    if(AIR_BLOCK_FEATURES.has((m.feat||{})[r+"_"+c])){ blocked[i] = 1; continue; }
+    let h = 0;
+    if(t===0) h += outer[i] ? TERRAIN_OUTER : TERRAIN_INNER;
+    if(t===6) h += PLATFORM_HEIGHT;                 // 特殊塔位是垫高的
+    const b = buildingAt(r,c);
+    if(b) h += buildingHeight(b);
+    if(h > FLY_HEIGHT) blocked[i] = 1;
+  }
+  return {blocked, cols, rand: !!rand};
+}
+function airBlocked(m,r,c,air){
+  if(r<0||c<0||r>=m.rows||c>=m.cols) return true;
+  if(!air) return false;
+  return air.blocked[r*air.cols+c] === 1;
+}
+/* fly = true 时按飞行狼算（游戏里飞行单位走的是「空中层」）：
+   按上面的高度模型判断能不能过；地图外和羊村本体（非入村口那格）同样走不了 ——
+   飞行狼照样要从入村口进村。 */
+function walkable(m,r,c,withBuildings,fly,air){
   if(r<0||c<0||r>=m.rows||c>=m.cols) return false;
   const t = cellType(m,r,c);
+  if(fly){
+    if(t===2) return false;                            // 出狼口本身不站人（狼在前一格生成）
+    if(t===3 && !isVillageIn(m,r,c)) return false;      // 羊村本体
+    if(airBlocked(m,r,c,air)) return false;             // 高于 1100 的格子飞不过去
+    return true;
+  }
   if(t===3){ if(!isVillageIn(m,r,c)) return false; }   // 村子其它格=障碍，不算路线
   else if(!WALK_TYPES.has(t)) return false;
   if(withBuildings && buildingAt(r,c)) return false;
@@ -562,7 +994,35 @@ function arrowOf(text){
   for(const ch in ARROWS) if(text.indexOf(ch) >= 0) return ARROWS[ch];
   return null;
 }
-function neighborsOf(m,r,c,withBuildings,out){
+/* 金字塔 = 两条笔直的单向通道交叉：
+   横着那截只能从左往右进、而且进去后必须一直往右出去；
+   竖着那截只能从下往上进、而且进去后必须一直往上出去。两条通道在中心交错，但都不能拐弯、不能逆行。 */
+function pyramidKind(m, r, c){ return (m.pyramid||{})[r+"_"+c] || null; }
+function pyramidStep(m, from, to){
+  const p = pyramidKind(m, to[0], to[1]);
+  if(!p) return null;                      // 目标不是金字塔格，正常走
+  const dr = to[0]-from[0], dc = to[1]-from[1];
+  if(dc > 0 && p.indexOf("right") >= 0) return "h";
+  if(dr < 0 && p.indexOf("up") >= 0) return "v";
+  return "block";                          // 逆行或斜穿，禁止
+}
+const SKEY = (r,c,ax)=>"".concat(r,"_",c,"_",ax||"");
+function keyToPos(k){ return k.split("_").slice(0,2).map(Number); }
+function reachedAt(dist, r, c){
+  return dist.has(SKEY(r,c,null)) || dist.has(SKEY(r,c,"h")) || dist.has(SKEY(r,c,"v"));
+}
+/* 在「格子 + 处于哪条通道」这个状态上走；fly = 飞行狼（按高度模型飞） */
+function nextStates(m,r,c,ax,withBuildings,out,fly,air){
+  if(!fly){
+    if(ax === "h"){                        // 横向通道里只能继续往右
+      if(walkable(m,r,c+1,withBuildings)) out.push([r,c+1,pyramidStep(m,[r,c],[r,c+1])]);
+      return;
+    }
+    if(ax === "v"){                        // 纵向通道里只能继续往上
+      if(walkable(m,r-1,c,withBuildings)) out.push([r-1,c,pyramidStep(m,[r,c],[r-1,c])]);
+      return;
+    }
+  }else ax = null;
   const t = cellType(m,r,c);
   // 踩到「传送入」一定会被送走，不能再当普通格子走出去
   if(t===4){
@@ -571,12 +1031,18 @@ function neighborsOf(m,r,c,withBuildings,out){
       if(cellType(m,rr,cc)!==5) continue;
       if(gid != null && (m.tele||{})[rr+"_"+cc] !== gid) continue;
       if(withBuildings && buildingAt(rr,cc)) continue;
-      out.push([rr,cc]);
+      out.push([rr,cc,null]);
     }
     return;
   }
-  for(const [dr,dc] of DIRS){
-    if(walkable(m,r+dr,c+dc,withBuildings)) out.push([r+dr,c+dc]);
+  // 飞行狼在长度相同的几条最短路之间随机挑一条（所以每次模拟的飞行路线会略有不同）
+  const dirs = (fly && air && air.rand) ? DIRS.slice().sort(()=>Math.random()-0.5) : DIRS;
+  for(const [dr,dc] of dirs){
+    const nr = r+dr, nc = c+dc;
+    if(!walkable(m,nr,nc,withBuildings,fly,air)) continue;
+    const step = fly ? null : pyramidStep(m,[r,c],[nr,nc]);
+    if(step === "block") continue;
+    out.push([nr,nc,step]);
   }
 }
 /* 出入口分组：
@@ -661,66 +1127,77 @@ function entryGroups(m){
     const label = m.labels[key(lead)] || "";
     let dir = arrowOf(label);
     if(!dir) dir = edgeDir[key(lead)] || null;
-    let front = null;
+    let fronts = [];
     if(dir){
       const p = isVillage ? [lead[0]-dir[0], lead[1]-dir[1]] : [lead[0]+dir[0], lead[1]+dir[1]];
-      if(inside(p)) front = p;
-    }else{
-      // 图册少数出入口没画箭头：只有一个可走邻居就用它，否则就用这一格自己
-      const nb = DIRS.map(([dr,dc])=>[lead[0]+dr, lead[1]+dc]).filter(p=>inside(p)&&walkable(m,p[0],p[1],false));
-      front = nb.length===1 ? nb[0] : lead;
+      if(inside(p)) fronts = [p];
     }
-    return {cells:grp, lead, label, dir, front};
+    if(!fronts.length){
+      // 图册没画箭头（麦恩矿山、缠怨谷等）：四个方向都可以出狼 / 进村，会被建筑和障碍挡住，
+      // 所以起点取所有可走邻居，最后只画最短的那条路线
+      fronts = DIRS.map(([dr,dc])=>[lead[0]+dr, lead[1]+dc])
+        .filter(p=>inside(p) && walkable(m,p[0],p[1],false));
+      if(!fronts.length && isVillage) fronts = [lead];
+    }
+    return {cells:grp, lead, label, dir, fronts, front: fronts[0] || null};
   };
   return {
     entrances: groupMarkers(m, ents).map(g=>mk(g, false)),
     villages:  groupMarkers(m, vils).map(g=>mk(g, true)),
   };
 }
-function bfsFrom(m, sources, withBuildings){
-  const key = p=>p[0]+","+p[1];
+function bfsFrom(m, sources, withBuildings, fly, air){
   const dist = new Map(), prev = new Map(), q = [];
-  sources.forEach(p=>{ dist.set(key(p),0); q.push(p); });
+  sources.forEach(p=>{
+    const k = SKEY(p[0], p[1], null);
+    if(!dist.has(k)){ dist.set(k, 0); q.push([p[0], p[1], null]); }
+  });
   let head=0;
   while(head<q.length){
-    const [r,c] = q[head++];
+    const [r,c,ax] = q[head++];
     const nb=[];
-    neighborsOf(m,r,c,withBuildings,nb);
-    nb.forEach(([nr,nc])=>{
-      const k = nr+","+nc;
+    nextStates(m,r,c,ax,withBuildings,nb,fly,air);
+    nb.forEach(([nr,nc,nax])=>{
+      const k = SKEY(nr,nc,nax);
       if(dist.has(k)) return;
-      dist.set(k, dist.get(key([r,c]))+1);
-      prev.set(k, [r,c]);
-      q.push([nr,nc]);
+      dist.set(k, dist.get(SKEY(r,c,ax))+1);
+      prev.set(k, [r,c,ax]);
+      q.push([nr,nc,nax]);
     });
   }
   return {dist, prev};
 }
-/* 每个出狼口都取到最近羊村口的最短路线 */
-function shortestPaths(){
+/* 每个出狼口都取到最近羊村口的最短路线；
+   fly = true 时算飞行狼的路线（按高度模型决定能不能飞过），rand = true 时在等长的几条路里随机挑 */
+function shortestPaths(fly, rand){
   const m = cur(), {entrances, villages} = entryGroups(m);
   if(!entrances.length || !villages.length) return [];
+  const air = fly ? airMap(m, rand) : null;
   const key = p=>p[0]+","+p[1];
-  const targets = villages.map(v=>v.front).filter(Boolean);
-  const targetKeys = new Set(targets.map(key));
   const out = [];
   entrances.forEach(e=>{
-    const start = e.front;
-    if(!start || !walkable(m,start[0],start[1],true)) return;
-    const {dist, prev} = bfsFrom(m, [start], true);
-    let bestD = Infinity;
+    // 没画箭头的出狼口有多个可能起点，一起当源点，最后取最短的那条
+    const starts = (e.fronts && e.fronts.length ? e.fronts : [e.front])
+      .filter(p=>p && walkable(m,p[0],p[1],true,fly,air));
+    if(!starts.length) return;
+    const {dist, prev} = bfsFrom(m, starts, true, fly, air);
+    let bestD = Infinity, bestK = null;
     villages.forEach(v=>{
       if(!v.front) return;
-      const d = dist.get(key(v.front));
-      if(d!=null && d<bestD) bestD = d;
+      [null,"h","v"].forEach(ax=>{
+        const k = SKEY(v.front[0], v.front[1], ax);
+        const d = dist.get(k);
+        if(d!=null && d<bestD){ bestD = d; bestK = k; }
+      });
     });
-    if(bestD===Infinity) return;
-    // 先取一条最短路线
-    const target = targets.find(t=>dist.get(key(t))===bestD);
-    if(!target) return;
+    if(!bestK) return;
     const base = [];
-    let p = target;
-    while(p){ base.push(p); p = prev.get(key(p)); }
+    let st = bestK;
+    while(st){
+      base.push(keyToPos(st));
+      const pr = prev.get(st);
+      st = pr ? SKEY(pr[0],pr[1],pr[2]) : null;
+    }
     base.reverse();
     const routes = [base];
     // 「传送入」对多个「传送出」时，每条分支都要画出来
@@ -738,14 +1215,24 @@ function shortestPaths(){
       outs.forEach(o=>{
         const nxt = base[i+1];
         if(nxt && o[0]===nxt[0] && o[1]===nxt[1]) return;   // 主路线已经走了这条
-        const sub = bfsFrom(m, [o], true);
-        let bd = Infinity;
-        targetKeys.forEach(k=>{ const d = sub.dist.get(k); if(d!=null && d<bd) bd = d; });
-        if(bd===Infinity) return;
-        const tk = [...targetKeys].find(k=>sub.dist.get(k)===bd);
+        const sub = bfsFrom(m, [o], true, fly, air);
+        let bd = Infinity, bk = null;
+        villages.forEach(v=>{
+          if(!v.front) return;
+          [null,"h","v"].forEach(ax=>{
+            const k = SKEY(v.front[0], v.front[1], ax);
+            const d = sub.dist.get(k);
+            if(d!=null && d<bd){ bd = d; bk = k; }
+          });
+        });
+        if(!bk) return;
         const tail = [];
-        let q = tk.split(",").map(Number);
-        while(q){ tail.push(q); q = sub.prev.get(key(q)); }
+        let st2 = bk;
+        while(st2){
+          tail.push(keyToPos(st2));
+          const pr = sub.prev.get(st2);
+          st2 = pr ? SKEY(pr[0],pr[1],pr[2]) : null;
+        }
         tail.reverse();
         routes.push([...prefix, ...tail]);
       });
@@ -755,29 +1242,6 @@ function shortestPaths(){
       out.push({ path:[e.lead, ...r, ...(vil? [vil.lead] : [])], from:e, to:vil });
     });
   });
-  return out;
-}
-/* 上一格：距离正好少 1，并且真的能从它走到这一格 */
-function parentsOf(m, cell, dist, withBuildings){
-  const key = p=>p[0]+","+p[1];
-  const d = dist.get(key(cell));
-  const out = [];
-  if(d==null || d<=0) return out;
-  const self = cellType(m,cell[0],cell[1]);
-  for(const [dr,dc] of DIRS){
-    const p = [cell[0]+dr, cell[1]+dc];
-    if(dist.get(key(p))!==d-1) continue;
-    if(cellType(m,p[0],p[1])===4) continue;      // 传送入不能直接走到旁边
-    out.push(p);
-  }
-  if(self===5){                                   // 传送出：上一格可能是同色传送入
-    const gid = (m.tele||{})[cell[0]+"_"+cell[1]];
-    for(let r=0;r<m.rows;r++) for(let c=0;c<m.cols;c++){
-      if(cellType(m,r,c)!==4) continue;
-      if(gid!=null && (m.tele||{})[r+"_"+c]!==gid) continue;
-      if(dist.get(r+","+c)===d-1) out.push([r,c]);
-    }
-  }
   return out;
 }
 /* 传送是瞬移，画线时要断开成分段 */
@@ -811,18 +1275,27 @@ function checkPath(){
   const terrOk = p=>p && walkable(m,p[0],p[1],false);
   const realOk = p=>p && walkable(m,p[0],p[1],true);
   const badEntT = entrances.filter(e=>!terrOk(e.front));
-  const badEnt  = entrances.filter(e=>!realOk(e.front));
+  const anyOk = (e, fn)=> (e.fronts && e.fronts.length ? e.fronts : [e.front]).some(p=>fn(p));
+  const badEnt  = entrances.filter(e=>!anyOk(e, realOk));
   const badVilT = villages.filter(v=>!terrOk(v.front));
   const badVil  = villages.filter(v=>!realOk(v.front));
+  // 每个出狼口单独看有没有路能到村口（出狼口可能没被直接堵，但路被堵死了）
+  const deadEnt = entrances.filter(e=>{
+    const st = (e.fronts && e.fronts.length ? e.fronts : [e.front]).filter(realOk);
+    if(!st.length) return false;
+    const one = bfsFrom(m, st, true);
+    return !villages.some(v=>v.front && reachedAt(one.dist, v.front[0], v.front[1]));
+  });
 
   // 只看地形
   const terr = bfsFrom(m, starts.filter(terrOk), false);
-  const terrOpenV = villages.filter(v=>v.front && terr.dist.has(key(v.front)));
+  const terrOpenV = villages.filter(v=>v.front && reachedAt(terr.dist, v.front[0], v.front[1]));
   // 算上建筑
   const built = bfsFrom(m, starts.filter(realOk), true);
-  const openV = villages.filter(v=>v.front && built.dist.has(key(v.front)));
+  const openV = villages.filter(v=>v.front && reachedAt(built.dist, v.front[0], v.front[1]));
 
   let html = "";
+  const needAll = (m.villageRule === "all");
   // 地形层面（游戏本身保证连通，这里只在数据可能有问题时提醒一句）
   if(badEntT.length || badVilT.length){
     html += '<div class="note">（本图出入口方向上的格子在地形数据里不可走，可能是图册画错了，可用「改地形」修正）</div>';
@@ -830,8 +1303,16 @@ function checkPath(){
   if(badEnt.length){
     html += '<div class="warn">× 有 '+badEnt.length+' 个出狼口被堵住了！出狼口顺着箭头方向的第 1 格不能放建筑。</div>';
   }
+  if(deadEnt.length){
+    html += '<div class="warn"'+(html?' style="margin-top:4px"':'')+'>× 有 '+deadEnt.length+
+            ' 个出狼口走不出去（路被堵死了，狼出来会卡住）。</div>';
+  }
   if(openV.length===0){
-    html += '<div class="warn"'+(html?' style="margin-top:4px"':'')+'>× 当前布阵把所有入村口都堵死了，至少要留 1 个。</div>';
+    html += '<div class="warn"'+(html?' style="margin-top:4px"':'')+'>× 当前布阵把所有入村口都堵死了'+
+            (needAll ? '（本图两个入村口都不能堵）' : '，至少要留 1 个')+'。</div>';
+  }else if(needAll && openV.length < villages.length){
+    html += '<div class="warn"'+(html?' style="margin-top:4px"':'')+'>× 本图（'+m.name+'）的入村口一个都不能堵，现在有 '+
+            (villages.length-openV.length)+' 个进不去。</div>';
   }else if(openV.length < villages.length){
     html += '<div class="warn"'+(html?' style="margin-top:4px"':'')+'>△ 有 '+(villages.length-openV.length)+' 个入村口进不去（只要还剩 1 个就允许）。</div>';
   }else{
@@ -844,6 +1325,14 @@ function checkPath(){
             (paths.length<entrances.length ? '（有 '+(entrances.length-paths.length)+' 个出狼口走不出去）' : '') +
             '</div>';
   }
+  if(mapHasFlyer(m)){
+    const fly = shortestPaths(true);
+    if(fly.length){
+      html += '<div class="note" style="margin-top:4px">本图有会飞的狼：飞行路线 '+fly.length+' 条，长度：' +
+              fly.map(p=>p.path.length).join(" / ")+' 格（按飞行高度 1100 算：地图外围的高山、' +
+              '特殊塔位上的高塔飞不过去，需要绕路；蓝色虚线）。</div>';
+    }
+  }
   box.innerHTML = html;
 }
 
@@ -852,10 +1341,10 @@ function setHint(t){ document.getElementById("hint").textContent = t || ""; }
 
 function renderChapters(){
   const box = document.getElementById("chapterTabs"); box.innerHTML="";
-  [1,2,3,4,0].forEach(ch=>{
+  [1,2,3,4,0,-1].forEach(ch=>{
     const b = document.createElement("button");
     b.className = "chip" + (state.chapter===ch ? " on":"");
-    b.textContent = CHAPTER_NAME[ch];
+    b.textContent = ch === -1 ? "自定义" : CHAPTER_NAME[ch];
     b.onclick = ()=>{ state.chapter = ch; renderChapters(); renderMapList();
       const first = D.maps.findIndex(m=>m.chapter===ch);
       if(first>=0 && cur().chapter!==ch) selectMap(first); };
@@ -880,7 +1369,7 @@ function renderTowers(){
     const b = document.createElement("button");
     b.className = "chip" + (state.sel.kind==="tower" && state.sel.tower===n ? " on":"");
     b.textContent = n + " ≤" + MAXLV[n];
-    b.onclick = ()=>{ state.sel.kind="tower"; state.sel.tower=n; syncLevel(); renderTowers(); renderSpecs(); renderSel(); };
+    b.onclick = ()=>{ state.sel.kind="tower"; state.sel.tower=n; syncLevel(); renderTowers(); renderSpecs(); renderSel(); applyToSelected(); };
     box.appendChild(b);
   });
 }
@@ -901,7 +1390,7 @@ function renderGems(){
     const b = document.createElement("button");
     b.className = "chip" + (curColor!==0 && gemById(state.sel.gem).tier===tier ? " on":"") + (curColor===0?" off":"");
     b.textContent = TIER_NAME[tier];
-    b.onclick = ()=>{ if(curColor===0) return; state.sel.gem = g.id; renderGems(); renderSel(); };
+    b.onclick = ()=>{ if(curColor===0) return; state.sel.gem = g.id; renderGems(); renderSel(); applyToSelected(); };
     tbox.appendChild(b);
   });
 }
@@ -913,6 +1402,7 @@ function setGemColor(color){
     state.sel.gem = g.id;
   }
   syncLevel(); renderGems(); renderSel();
+  applyToSelected();
 }
 function renderSpecs(){
   const box = document.getElementById("specList"); box.innerHTML="";
@@ -923,7 +1413,7 @@ function renderSpecs(){
     b.className = "chip" + (state.sel.kind==="special" && state.sel.spec===s.name ? " on":"");
     b.textContent = s.name + " ("+used+"/"+(s.limit>=90?"∞":s.limit)+")";
     b.title = s.effect + " · 造价 " + fmt(sec==="front"?s.front:s.defend);
-    b.onclick = ()=>{ state.sel.kind="special"; state.sel.spec=s.name; renderTowers(); renderSpecs(); renderSel(); };
+    b.onclick = ()=>{ state.sel.kind="special"; state.sel.spec=s.name; renderTowers(); renderSpecs(); renderSel(); applyToSelected(); };
     box.appendChild(b);
   });
 }
@@ -966,7 +1456,66 @@ function syncLevel(){
 function setLevel(v){
   const max = MAXLV[state.sel.tower]||100;
   state.sel.level = Math.max(1, Math.min(max, Math.round(v)||1));
-  syncLevel(); renderSel(); 
+  syncLevel(); renderSel();
+  applyToSelected();
+}
+/* ---------- 点塔即同步参数 / 改参数直接套用 ----------
+   用鼠标点图上的建筑：左边的「建塔 / 宝石 / 等级」会自动切换成这座建筑的状态；
+   之后在左边改塔种、宝石颜色、宝石品质、等级，会直接套用到选中的这座建筑上（方便一次调好几座塔）。 */
+function selectBuilding(r, c){
+  const b = buildingAt(r, c);
+  if(!b){ state.selBuilding = null; renderStats(); draw(); return false; }
+  state.selBuilding = {r, c};
+  if(b.kind === "tower"){
+    state.sel.kind = "tower";
+    state.sel.tower = b.tower;
+    state.sel.gem = b.gem || "none";
+    state.sel.level = b.level || 1;
+  }else{
+    state.sel.kind = "special";
+    state.sel.spec = b.spec;
+  }
+  syncLevel(); renderTowers(); renderGems(); renderSpecs(); renderSel(); renderStats(); draw();
+  setHint(b.kind === "tower"
+    ? "已选中 " + (r+1) + "-" + (c+1) + " 的 " + buildingLabel(b) + " Lv." + b.level + "：左边参数已同步，改动会直接套用到它"
+    : "已选中 " + (r+1) + "-" + (c+1) + " 的 " + b.spec + "：左边参数已同步，改动会直接套用到它");
+  return true;
+}
+/* 把左边当前的塔/宝石/等级套用到选中的建筑上（只在参数真的不一样时才动手，能撤销） */
+function applyToSelected(){
+  const sb = state.selBuilding;
+  if(!sb || state.autoApply === false) return false;
+  const m = cur(), R = rec(m);
+  const b = buildingAt(sb.r, sb.c);
+  if(!b){ state.selBuilding = null; return false; }
+  if(state.sel.kind === "tower"){
+    if(b.kind === "tower" && b.tower === state.sel.tower && b.gem === state.sel.gem && b.level === state.sel.level)
+      return false;
+    if(b.kind !== "tower"){                 // 特殊建筑要换成塔：用「放置」工具再点一次这个格子
+      setHint("选中的是" + b.spec + "，要换成塔请用「放置」工具点这个格子");
+      return false;
+    }
+    snapshot();
+    b.tower = state.sel.tower; b.gem = state.sel.gem; b.level = state.sel.level;
+  }else{
+    const s = specInfo(state.sel.spec);
+    if(b.kind === "special" && b.spec === state.sel.spec) return false;
+    if(b.kind !== "special"){
+      setHint("选中的是塔，要换成" + state.sel.spec + "请用「放置」工具点这个格子");
+      return false;
+    }
+    const used = layoutOf().filter(x=>x.kind==="special" && x.spec===state.sel.spec).length;
+    if(s && used >= s.limit){
+      setHint(s.name + " 每张图最多 " + (s.limit>=90?"不限":s.limit) + " 个");
+      renderSel(); return false;
+    }
+    snapshot();
+    b.spec = state.sel.spec;
+  }
+  save(); renderStats(); renderSpecs(); renderSel(); draw(); checkPath();
+  const nb = buildingAt(sb.r, sb.c);
+  if(nb) setHint("已套用到 " + (sb.r+1) + "-" + (sb.c+1) + "：" + buildingLabel(nb) + (nb.kind==="tower" ? " Lv."+nb.level : ""));
+  return true;
 }
 function renderStats(){
   const m = cur(), sec = secOf(m);
@@ -1066,8 +1615,37 @@ function renderLegend(){
   // 本图特有的地形（图册「注：」里列的那些）也按颜色列进图例
   const special = (m.legend||[]).map(([name, type])=>
     '<div><i style="background:'+COLORS[type]+'"></i>'+name+'（'+TYPE_NAME[type]+'）</div>');
+  // 同类地形里再分细类：每个细类给出画在地图上的那个符号
+  const featNames = [];
+  for(const key in (m.feat||{})){
+    const n = m.feat[key];
+    if(featNames.indexOf(n) < 0) featNames.push(n);
+  }
+  if(Object.keys(m.marks||{}).length && featNames.indexOf("\u203b") < 0) featNames.push("\u203b");
+  const feats = featNames.map(n=>{
+    const st = featureStyle(n);
+    const label = n === "\u203b" ? "弹簧落点" : n;
+    return '<div><b style="color:'+st.color+';font-size:14px;line-height:1">'+st.sym+'</b> '+label+'</div>';
+  });
   let html = rows.join("");
   if(special.length) html += '<div style="grid-column:1/3;margin-top:4px" class="note">本图特殊地形：</div>' + special.join("");
+  // 传送阵的颜色配对，避免分不清哪个入口连哪个出口
+  const tp = teleportGroups(m);
+  const tpIds = Object.keys(tp).filter(id=>tp[id].in.length || tp[id].out.length);
+  if(tpIds.length){
+    html += '<div style="grid-column:1/3;margin-top:4px" class="note">传送阵配对（同色互通）：</div>' +
+      tpIds.map(id=>
+        '<div><i style="background:'+(tp[id].hex || "#888")+'"></i>'+
+        tp[id].label + '：' + tp[id].in.length + ' 个入口 → ' + tp[id].out.length + ' 个出口</div>').join("");
+  }
+  if(feats.length) html += '<div style="grid-column:1/3;margin-top:4px" class="note">地图上的符号（同类地形用相近符号，不同地形用不同颜色）：</div>' +
+    '<div style="grid-column:1/3"><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px">'+feats.join("")+'</div></div>';
+  // 路线的图例（黄色实线 = 走狼路线，蓝色虚线 = 飞行狼的路线）
+  html += '<div style="grid-column:1/3;margin-top:4px" class="note">路线颜色：</div>' +
+    '<div><i style="background:#ffee58"></i>走狼路线（地面狼）</div>' +
+    (mapHasFlyer(m)
+      ? '<div><i style="background:#63d2ff"></i>飞行狼路线（按飞行高度 1100 算，高处要绕开）</div>'
+      : '<div><i style="background:#63d2ff"></i>飞行狼路线（本图没有会飞的狼）</div>');
   document.getElementById("legend").innerHTML = html || '<div class="note">本图只有一种地形。</div>';
 }
 function loadBaseImage(){
@@ -1079,16 +1657,94 @@ function loadBaseImage(){
 }
 
 /* ================= 模拟出狼 ================= */
-/* ---------- 走狼预测（简化战斗模拟） ----------
+/* ---------- 走狼预测 ----------
    规则来自羊村研究笔记：25FPS（一帧 40ms）；塔攻击后冷却设为 2500，每帧减去面板攻速
    （配置 rate × 10），所以攻击间隔 = 2500/(rate×10) 帧（哨塔 rate18 → 0.556s，与笔记一致）；
    坐标单位 1000 = 1 格，狼速 speed 的单位是“每帧多少单位”。
-   简化：狼沿最短路线直线前进；不计算抗性、护盾、召唤、隐身、飞行、传送带与技能打断。 */
+   狼的技能来自游戏配置的怪物技能表：每个技能有自己的技能时钟，出生（或血量进入允许区间）
+   开始计时，冷却好了、没被沉默 / 眩晕时按概率发动；隐身期间塔选不到它；
+   诅咒结算时会沉默并打断周围非瞬发技能。 */
 const TICK = 0.04, UNIT = 1 / 1000;
+const SIM_MAX_T = 240;        // 一次模拟最多跑 4 分钟（够狼走完全程；分身多了也不会算到超时）
+const MAX_WOLVES = 150;       // 场上的狼上限（召唤 / 分身 / 转生都受这个限制）
+const CAST_KINDS = {summon:1, cloud:1, massTreatment:1, shield:1, morph:1};   // 有前摇、能被打断的技能
+const DEATH_KINDS = {revive:1, reborn:1, burst:1};                             // 死亡触发（瞬发，沉默打不断）
+function skillNum(v, d){ return (typeof v === "number" && isFinite(v)) ? v : d; }
+function wolfSkillList(id){ return (D.wolfSkills || {})[id] || []; }
+/* 血量区间：1 最危险（≤25%），4 接近满血 —— 技能只在允许的区间里发动 */
+function hpBand(w){ const r = w.hpMax > 0 ? w.hp / w.hpMax : 1; return r <= 0.25 ? 1 : r <= 0.5 ? 2 : r <= 0.75 ? 3 : 4; }
+/* 走到金字塔内部（单向通道那几格）时按隐身处理：塔没法把它当目标索敌 */
+function inPyramid(m, w){
+  if(!w.route || !w.route.length) return false;
+  const k = Math.max(0, Math.min(w.route.length - 1, Math.floor(w.pos)));
+  const c = w.route[k];
+  return !!pyramidKind(m, c[0], c[1]);
+}
+function mapHasFlyer(m){
+  m = m || cur();
+  const ids = [];
+  ((m.wolf || {}).prop || []).forEach(t=>ids.push(t[1]));
+  if((m.wolf || {}).boss) ids.push(m.wolf.boss);
+  (((m.wolf || {}).randomBoss) || []).forEach(t=>ids.push(t[1]));
+  if(lastWave && lastWave.list) lastWave.list.forEach(t=>ids.push(t.id));
+  return ids.some(id=>(D.wolfs[id] || {}).fly);
+}
+/* 飞行狼可选的几条等长路线：跑几次随机寻路，把起点终点相同的收集起来。
+   结果按地图 + 现在的布阵缓存，改地形或建塔后自动重算。 */
+/* 飞行狼不可能走一条笔直的线：在最短路线周围随机偏折几下（每次多绕 2 格，首尾不变） */
+function jitterFlyPath(route, m, air){
+  if(!route || route.length < 5) return route;
+  const walk = p=>p[0]>=0 && p[1]>=0 && p[0]<m.rows && p[1]<m.cols && walkable(m,p[0],p[1],true,true,air);
+  const straight = route.every(p=>p[0]===route[0][0]) || route.every(p=>p[1]===route[0][1]);
+  const want = straight ? 1 + Math.floor(Math.random()*2) : (Math.random() < 0.6 ? 1 : 2);
+  const out = route.slice();
+  let done = 0;
+  for(let tries=0; tries<60 && done<want; tries++){
+    const i = 1 + Math.floor(Math.random()*Math.max(1, out.length-3));
+    if(i+1 >= out.length) continue;
+    const a = out[i], b = out[i+1];
+    const dr = b[0]-a[0], dc = b[1]-a[1];
+    if(Math.abs(dr)+Math.abs(dc) !== 1) continue;
+    const perp = dr === 0 ? [[1,0],[-1,0]] : [[0,1],[0,-1]];
+    const side = perp[Math.random()<0.5 ? 0 : 1];
+    const d1 = [a[0]+side[0], a[1]+side[1]];
+    const d2 = [b[0]+side[0], b[1]+side[1]];
+    if(!walk(d1) || !walk(d2)) continue;
+    out.splice(i+1, 0, d1, d2);
+    done++;
+  }
+  return out;
+}
+let flyAltCache = null;
+function flyAlternates(m){
+  const R = rec(m);
+  const key = m.name + "|" + (R.layout||[]).map(b=>[b.r,b.c,b.tower||b.spec||"",b.gem||"",b.spec||""].join(",")).join(";") +
+              "|" + Object.keys(R.terrain||{}).map(k=>k+":"+R.terrain[k]).join(",");
+  if(flyAltCache && flyAltCache.key === key) return flyAltCache;
+  const base = shortestPaths(true);
+  const alts = base.map(p=>[p.path]);
+  const sig = p=>p[0].join(",") + ">" + p[p.length-1].join(",");
+  for(let i=0;i<4;i++){
+    shortestPaths(true, true).forEach(p=>{
+      const s = sig(p.path);
+      const slot = base.find(o=>sig(o.path) === s);
+      if(!slot) return;
+      const target = alts[base.indexOf(slot)];
+      if(!target.some(q=>q.join("|") === p.path.join("|"))) target.push(p.path);
+    });
+  }
+  flyAltCache = {key, base, alts};
+  return flyAltCache;
+}
 function towerCombat(b){
   const buff = statueBuff(b.r, b.c);
   const atk = towerAtk(b.tower, b.level, b.gem) || 0;
   const rate = (D.towerRate||{})[b.tower] || 18;
+  // 织女雕像的射程加成也要算进模拟里（原来只有画范围时加了）
+  const base = rangeInfo(b.tower, b.gem);
+  const info = !base ? null : (base.type === "cross"
+    ? {type:"cross", arms: base.arms*buff.range}
+    : {type:"circle", r: base.r*buff.range, blind: base.blind});
   const g = gemById(b.gem), e = D.gemEffect || {};
   const pick = (tbl)=> ((((e[tbl]||{})[b.tower])||{})[g.tierName]) || 0;
   let slow = 0, poison = null, burn = null;
@@ -1107,17 +1763,25 @@ function towerCombat(b){
   const comboMul = combo > 1 ? 1 + 0.08*(combo-1) : 1;
   return {
     dmg: Math.max(0, Math.round(atk*buff.atk*comboMul)),
-    interval: 2500/(rate*10)*TICK,
-    info: rangeInfo(b.tower, b.gem),
+    interval: 2500/(rate*10*buff.rate)*TICK,      // 盘龙柱 +15% 攻速
+    info,
     slow, poison, burn,
+    aoe: (g.aoe && g.aoe[b.tower]) || null,          // 炮塔溅射
+    chain: (b.tower==="镶嵌塔" && g.color===5) ? (((e.chain||{})[g.tierName]) || null) : null,
     crit: g.color===2 ? (pick("crit") || null) : null,
     vertigo: g.color===2 ? (pick("vertigo") || null) : null,
     timid: g.color===1 ? (pick("timid") || null) : null,
     knock: g.color===5 ? (pick("knock") || 0) : 0,
     cuss: (b.tower==="镶嵌塔" && g.color===6) ? (pick("cuss") || 0) : 0,
     elec: (b.tower==="镶嵌塔" && g.color===5),      // 紫宝石镶嵌塔 = 闪电攻击
+    field: (b.tower==="镶嵌塔" && g.color===2),     // 黄宝石镶嵌塔 = 闪光攻击，打范围内所有狼
+    light: (b.tower==="镶嵌塔" && g.color===2),     // 光塔：伤害要按狼的抗光 / 怕光折算
+    multi: (b.tower==="散弹塔") ? 3 : 0,            // 散弹塔可同时追踪 3 个目标
     airMul: b.tower === "散弹塔" ? 2 : 1,     // 散弹塔打飞行狼伤害与效果翻倍
     canAir: !(b.tower === "炮塔" || b.tower === "波动塔"),   // 炮塔、波动塔只能对地
+    towerName: b.tower,
+    gemTier: g.tier || 0,
+    gemName: g.name,
   };
 }
 function canHitAir(T, w){ return !w.fly || T.canAir; }
@@ -1127,6 +1791,8 @@ function wolfPoint(w){
   const j = Math.min(i+1, n-1);
   const f = Math.max(0, Math.min(1, w.pos - i));
   const a = w.route[i], b = w.route[j];
+  // 传送出入口之间那两格并不相邻：直接“瞬移”到传送出口，不要插值出一条穿墙的直线
+  if(Math.abs(a[0]-b[0]) + Math.abs(a[1]-b[1]) !== 1) return f > 0 ? b : a;
   return [a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f];
 }
 function inRange(m, tw, info, wr, wc){
@@ -1147,102 +1813,544 @@ function inRange(m, tw, info, wr, wc){
 }
 function simulateWalk(){
   const m = cur();
-  const wave = generateWave();
-  if(!wave) return {err:"这张图没有出狼配置"};
-  const routes = shortestPaths();
+  const wave = lastWave;
+  if(!wave) return {err:"先点「随机生成一波」抽一波狼，再点模拟走狼"};
+  const routes = shortestPaths(false);
   if(!routes.length) return {err:"当前布阵下狼走不出去（出狼口被堵或路线不通）"};
+  const flyRoutes = shortestPaths(true);            // 会飞的狼的路线（下面再从等长的几条里随机会挑）
+  const flyAlts = flyRoutes.length ? flyAlternates(m).alts : [];
+  const airForJitter = flyAlts.length ? airMap(m, false) : null;   // 飞行偏折时判断这格能不能飞
+  /* 爆炸箱：狼撞上去会被弹后退，箱子被朝狼前进方向推一格；同一只狼不重复触发同一格 */
+  const boxes = new Map();
+  for(const key in (m.feat||{})){
+    if(m.feat[key] !== "爆炸箱") continue;
+    const [r,c] = key.split("_").map(Number);
+    boxes.set(key, {r, c, n:0});
+  }
+  const BOX_PUSH_LIMIT = 4;                     // 百科：箱子被推 4 次爆炸
   const towers = layoutOf().filter(b=>b.kind==="tower").map(b=>({
-    r:b.r, c:b.c, level:b.level, label:buildingLabel(b), cd: Math.random()*0.6, ...towerCombat(b),
+    r:b.r, c:b.c, level:b.level, label:buildingLabel(b), cd: Math.random()*0.6, cloudT:0, ...towerCombat(b),
   }));
-  const wolves = [];
-  wave.list.forEach((w, i)=>{
-    const info = D.wolfs[w.id] || {};
-    const hp = wolfHp(w.id, wave.level, wave.diff);
-    wolves.push({
-      id:w.id, name:wolfName(w.id), hp, hpMax:hp,
-      fly: !!(D.wolfs[w.id]||{}).fly,
-      res: (D.wolfSkill||{})[w.id] || {},
-      route: routes[i % routes.length].path,
-      pos: 0,
-      speed: (info.speed || 20) * UNIT * 25,
-      spawn: i * 0.4,
-      done:false, leaked:false,
-      slow:0, slowT:0, poison:null, poisonT:0, burns:[],
-      stunT:0, backT:0, cuss:null,
+  const wolves = [], pending = [], castLog = {};
+  const bump = (w, name)=>{ w.uses[name] = (w.uses[name]||0)+1; castLog[name] = (castLog[name]||0)+1; };
+  const canSpawn = ()=> wolves.length + pending.length < MAX_WOLVES;
+  /* 弹簧：
+     · 只有不会飞的、体型轻的狼会被弹走（笔记：宽×高 ≥ 487500 算沉重；飞行单位在天上，不碰弹簧）
+     · 每个弹簧有速率（笔记：20，约 5 秒一次）和最大弹起数 5，冷却中走过去的狼只是路过
+     · 落点：图册上带 ※ 的格子；已经有建筑的格子不算 */
+  const springCells = new Set(), landCells = [];
+  for(const key in (m.feat||{})) if(m.feat[key] === "弹簧") springCells.add(key);
+  for(const key in (m.marks||{})){
+    const pos = key.split("_").map(Number);
+    if(buildingAt(pos[0], pos[1])) continue;
+    landCells.push(pos);
+  }
+  const SPRING_CD = 5;          // 弹簧每 5 秒才能弹一次
+  const SPRING_MAX = 5;         // 一个弹簧最多弹 5 次
+  const springState = {};
+  const isLight = (w)=>{ const info = D.wolfs[w.id] || {};
+    if(w.fly) return false;                              // 在天上，碰不到弹簧
+    const area = (info.w||0)*(info.h||0);
+    return area > 0 && area < 487500; };
+  /* 从某个格子重新找一条去村口的路（弹簧落点用）；找不到就返回 null */
+  const reRoute = (cell, fly)=>{
+    const air = fly ? airMap(m, false) : null;
+    const {dist, prev} = bfsFrom(m, [cell], true, fly, air);
+    let bestK = null, bd = Infinity;
+    entryGroups(m).villages.forEach(v=>{
+      if(!v.front) return;
+      [null,"h","v"].forEach(ax=>{
+        const k = SKEY(v.front[0], v.front[1], ax);
+        const d = dist.get(k);
+        if(d != null && d < bd){ bd = d; bestK = k; }
+      });
     });
+    if(!bestK) return null;
+    const path = [];
+    let st = bestK;
+    while(st){ path.push(keyToPos(st)); const pr = prev.get(st); st = pr ? SKEY(pr[0],pr[1],pr[2]) : null; }
+    path.reverse();
+    const vil = entryGroups(m).villages.find(v=>v.front && v.front[0]===path[path.length-1][0] && v.front[1]===path[path.length-1][1]);
+    return vil && vil.lead ? [...path, vil.lead] : path;
+  };
+  /* 生成一只狼。from = 从哪只狼身上分裂 / 召唤出来（沿用它的路线与位置） */
+  const mk = (id, hp, spawn, routeIdx, from, isMirror, hpMax)=>{
+    const info = D.wolfs[id] || {};
+    const rec = {
+      id, name:wolfName(id), hp, hpMax: hpMax || hp,
+      fly: !!info.fly,
+      res: (D.wolfSkill||{})[id] || {},
+      speed: (info.speed || 20) * UNIT * 25,
+      spawn, pos: from ? from.pos : 0,
+      done:false, leaked:false, dead:false, mirror: !!isMirror,
+      slow:0, slowT:0, poison:null, poisonT:0, burns:[], cuss:null, slowTier:0,
+      stunT:0, backT:0, silenceT:0, hideUntil:0, runUntil:0, runMul:1, tauntUntil:0,
+      shield:null, cast:null, linksUntil:0, linksRatio:0, slowf:null, dr:0,
+      skills: [], uses:{}, clones:[], expire:0,
+    };
+    // 技能表：被动（飞行 / 免疫电 / 无敌 / 减速粒子）当场生效，主动技能进技能时钟
+    wolfSkillList(id).forEach(s=>{
+      const p = Array.isArray(s.p) ? s.p : [], kind = s.k;
+      if(kind === "fly"){ rec.fly = true; return; }
+      if(kind === "isolation"){ rec.res = Object.assign({}, rec.res, {light: Math.max(rec.res.light||0, 1)}); return; }
+      if(kind === "strsmooth"){ rec.dr = Math.min(0.999, Math.max(rec.dr, skillNum(p[0], 0))); return; }
+      if(kind === "slowf"){ rec.slowf = {v: skillNum(p[0], 0), r: skillNum(p[1], 2200)/1000}; return; }
+      if(kind === "airborne"){ rec.air = true; return; }      // 空降：在走狼路线上随机位置落下
+      rec.skills.push({
+        kind, name:s.n || kind, p,
+        warmup: Math.max(0, skillNum(p[0], 0)),
+        cd: Math.max(0.2, skillNum(p[1], 3)),
+        prob: Math.max(0, Math.min(1, skillNum(p[2], 1))),
+        bands: Array.isArray(p[3]) ? p[3] : [1,2,3,4],
+        castTime: CAST_KINDS[kind] ? Math.max(0.1, skillNum(p[4], 1)) : 0,
+        timer:0, started:false, cdLeft:0, used:false,
+        left: kind === "revive" ? Math.max(1, Math.round(skillNum(p[0], 1))) : 0,
+      });
+    });
+    // 路线：飞行狼走空中路线（等长的几条里随机挑一条），地面狼走普通走狼路线；
+    // 召唤 / 分身 / 变身出来的狼，落在自己路线上离本体最近的那一格
+    if(rec.fly && flyAlts.length){
+      const ri = routeIdx % flyAlts.length;
+      rec.routeIdx = ri;
+      const pick = flyAlts[ri];
+      const chosen = pick[Math.floor(Math.random()*pick.length)];
+      rec.route = jitterFlyPath(chosen, m, airForJitter).slice(1);   // 飞行路线会随机偏折，不会是直线
+    }else{
+      const ri = routeIdx % routes.length;
+      rec.routeIdx = ri;
+      rec.route = routes[ri].path.slice(1);
+    }
+    if(from){
+      const cur = wolfPoint(from);
+      let best = 0, bd = Infinity;
+      rec.route.forEach((c, k)=>{
+        const d = Math.hypot(c[0]-cur[0], c[1]-cur[1]);
+        if(d < bd){ bd = d; best = k; }
+      });
+      rec.pos = best;
+    }
+    // 空降生成的狼（例如装甲运狼车倒地后转生的小突袭狼）：在走狼路线上随机位置出现，
+    // 但一定不会落在入村口前 6 格内
+    if(rec.air){
+      const hi = Math.max(0, rec.route.length - 1 - 6);
+      rec.pos = Math.floor(Math.random() * (hi + 1));
+    }
+    return rec;
+  };
+  wave.list.forEach((w, i)=>{
+    const hp = w.hp != null ? w.hp : wolfHp(w.id, wave.level, wave.diff);
+    const rec = mk(w.id, hp, i, i, null, false, w.hpMax);   // 出狼间隔 1 秒 1 只
+    if(w.boss) rec.boss = true;                 // 随机 Boss（动画里画大一圈 + 红虚线）
+    wolves.push(rec);
   });
   let dmgDealt = 0, killed = 0, t = 0;
-  for(t = 0; t < 600; t += TICK){
+  const record = [];                 // 每一帧记录狼的位置，用来回放走狼动画
+  /* 沉默 / 眩晕 / 击退 / 威吓都会打断正在前摇的非瞬发技能（复活、转生、自爆是瞬发，不受影响） */
+  const interrupt = (w)=>{
+    if(!w.cast) return;
+    w.cast.skill.cdLeft = Math.max(w.cast.skill.cdLeft, w.cast.skill.cd);
+    w.cast = null;
+  };
+  /* 死亡处理：重生（原地满血复活）→ 转生（换成另一批狼）→ 自爆（罩住附近的塔）→ 真的死 */
+  const die = (w)=>{
+    if(w.done) return;
+    if(w.mirror){                                                     // 分身没有死亡技能，死了就是死了
+      w.done = true; w.dead = true; killed++; return;
+    }
+    const rv = w.skills.find(a=>a.kind === "revive");
+    if(rv && rv.left > 0){
+      rv.left--; bump(w, "重生");
+      w.hp = Math.max(1, Math.round(w.hpMax * Math.max(0.05, skillNum(rv.p[1], 0.5))));
+      w.silenceT = 0; w.stunT = 0; w.backT = 0; w.cast = null;
+      w.burns.length = 0; w.poisonT = 0; w.poison = null;
+      return;
+    }
+    const rb = w.skills.find(a=>a.kind === "reborn");
+    if(rb && !rb.used){
+      rb.used = true; bump(w, "转生");
+      (rb.p[0] || []).forEach(id=>{
+        if(D.wolfs[id] && canSpawn()) pending.push(mk(id, wolfHp(id, wave.level, wave.diff), t, 0, w));
+      });
+      w.done = true; w.dead = true; killed++; return;
+    }
+    const bs = w.skills.find(a=>a.kind === "burst");
+    if(bs && !bs.used){
+      bs.used = true; bump(w, "自爆");
+      const rad = skillNum(bs.p[0], 2000)/1000, dur = Math.max(1, skillNum(bs.p[1], 5));
+      const p = wolfPoint(w);
+      towers.forEach(T=>{ if(Math.hypot(T.r+0.5-p[0], T.c+0.5-p[1]) <= rad) T.cloudT = Math.max(T.cloudT, t+dur); });
+    }
+    w.done = true; w.dead = true; killed++;
+  };
+  /* 技能真正生效。前摇结束（或瞬发）时调用 */
+  const castDone = (w, a)=>{
+    const p = a.p, bp = wolfPoint(w);
+    const near = (range)=>wolves.filter(o=>{
+      if(o.done || o === w) return false;
+      const q = wolfPoint(o);
+      return Math.hypot(q[0]-bp[0], q[1]-bp[1]) <= range;
+    });
+    switch(a.kind){
+      case "invisible":                        // 隐身：塔选不到它，闪电连锁也打不到
+        w.hideUntil = Math.max(w.hideUntil, t + Math.max(0.2, skillNum(p[4], 1)));
+        break;
+      case "sprint":                           // 狂奔：加速
+        w.runUntil = Math.max(w.runUntil, t + Math.max(0.5, skillNum(p[4], 1)));
+        w.runMul = Math.max(w.runMul, 1 + skillNum(p[5], 0));
+        break;
+      case "blink":                            // 闪烁：沿自己的路线往前跳一段
+        w.pos = Math.min(w.route.length - 1, w.pos + Math.max(0, skillNum(p[5], 0))/1000);
+        break;
+      case "links":                            // 灵魂治愈：替周围的狼分摊伤害
+        w.linksUntil = Math.max(w.linksUntil, t + Math.max(1, skillNum(p[4], 10)));
+        w.linksRatio = Math.max(w.linksRatio, Math.min(0.9, skillNum(p[6], 0.2)));
+        break;
+      case "massTreatment": {                  // 群疗：范围里的狼一起回血
+        const r = skillNum(p[5], 2000)/1000, rate = skillNum(p[6], 0.05);
+        near(r).forEach(o=>{ o.hp = Math.min(o.hpMax, o.hp + o.hpMax*rate); });
+        w.hp = Math.min(w.hpMax, w.hp + w.hpMax*rate);
+        break;
+      }
+      case "shield": {                         // 护盾：给范围内血最少的狼（都没有就给自己）
+        const r = skillNum(p[5], 1500)/1000, dur = Math.max(1, skillNum(p[6], 5));
+        const red = Math.min(0.9, Math.max(0, skillNum(p[7], 0.5)));
+        let best = null, br = Infinity;
+        near(r).forEach(o=>{ const ratio = o.hpMax ? o.hp/o.hpMax : 1; if(ratio < br){ br = ratio; best = o; } });
+        (best || w).shield = { until: t + dur, red };
+        break;
+      }
+      case "taunt":                            // 嘲讽：塔改打它，自己停下来顶着
+        w.tauntUntil = Math.max(w.tauntUntil, t + Math.max(1, skillNum(p[4], 3)));
+        w.shield = { until: t + Math.max(1, skillNum(p[4], 3)), red: 0.4 };
+        break;
+      case "summon": {                         // 召唤：按配置召唤同级的狼
+        const id = typeof p[5] === "string" ? p[5] : null;
+        if(id && D.wolfs[id]){
+          const n = Math.max(1, Math.min(8, Math.round(skillNum(p[6], 1))));
+          const ratio = Math.max(0.05, skillNum(p[7], 1));
+          for(let k=0;k<n && canSpawn();k++)
+            pending.push(mk(id, Math.max(1, Math.round(wolfHp(id, wave.level, wave.diff)*ratio)), t, 0, w));
+        }
+        break;
+      }
+      case "cloud": {                          // 乌云：罩住最近的一座塔
+        const r = skillNum(p[5], 1000)/1000, dur = Math.max(1, skillNum(p[6], 5));
+        let best = null, bd = Infinity;
+        towers.forEach(T=>{
+          const d = Math.hypot(T.r+0.5-bp[0], T.c+0.5-bp[1]);
+          if(d <= r && d < bd){ bd = d; best = T; }
+        });
+        if(best) best.cloudT = Math.max(best.cloudT, t + dur);
+        break;
+      }
+      case "morph": {                          // 变身：换成另一种狼，位置不变
+        const id = typeof p[5] === "string" ? p[5] : null;
+        if(id && D.wolfs[id] && canSpawn()){
+          // 变身成功会回满血，变成下一形态（下一形态自己也可能再变身一次）
+          const nw = mk(id, Math.max(1, wolfHp(id, wave.level, wave.diff)), t, 0, w);
+          pending.push(nw);
+          w.done = true;
+        }
+        break;
+      }
+      case "divide": {                         // 分身：分出 n 个分身（血量按本体当前血量比例，存在若干秒后自己消失）
+        const n = Math.max(1, Math.min(8, Math.round(skillNum(p[5], 2))));   // 忍者狼 2 个
+        const ratio = Math.max(0.01, skillNum(p[6], 0.35));
+        const life = Math.max(1, skillNum(p[4], 5));      // 技能表里的「分身存在 X 秒」
+        const cloneHp = Math.max(1, Math.round(w.hp * ratio));   // 按本体当前血量算
+        for(let k=0;k<n && canSpawn();k++){
+          const cl = mk(w.id, cloneHp, t, 0, w, true);
+          cl.expire = t + life;
+          cl.pos = Math.max(0, Math.min(w.route.length - 1, w.pos + (k - (n-1)/2) * 0.55));  // 分散一点
+          pending.push(cl);
+          w.clones.push(cl);
+        }
+        break;
+      }
+    }
+    bump(w, a.name);
+  };
+  for(t = 0; t < SIM_MAX_T; t += TICK){
+    if(pending.length){ pending.forEach(o=>wolves.push(o)); pending.length = 0; }
     let active = 0;
+    const linkers = wolves.filter(w=>!w.done && w.linksUntil > t && w.linksRatio > 0);
+    // 减速粒子：范围内的塔攻速下降
+    const auras = wolves.filter(w=>!w.done && w.slowf && t >= w.spawn);
+    const rateMul = (T)=>{
+      let f = 1;
+      auras.forEach(w=>{
+        const p = wolfPoint(w);
+        if(Math.hypot(T.r+0.5-p[0], T.c+0.5-p[1]) <= w.slowf.r) f *= Math.max(0.2, 1 - w.slowf.v);
+      });
+      return f;
+    };
     for(const w of wolves){
       if(w.done) continue;
       if(t < w.spawn){ active++; continue; }
+      if(w.mirror && w.expire && t >= w.expire){ w.done = true; continue; }   // 分身到时间自己消失
       if(w.slowT > 0) w.slowT -= TICK; else w.slow = 0;
-      if(w.stunT > 0){ w.stunT -= TICK; active++; continue; }        // 被眩晕：原地不动
+      if(w.silenceT > 0) w.silenceT -= TICK;
+      if(w.shield && w.shield.until <= t) w.shield = null;
+      // ---- 技能时钟：出生（或血量进入允许区间）开始计时，冷却好且没被沉默 / 眩晕才发动 ----
+      if(w.cast){
+        w.cast.left -= TICK;
+        if(w.cast.left <= 0){ const sk = w.cast.skill; w.cast = null; castDone(w, sk); }
+      }
+      if(w.skills.length){
+        const band = hpBand(w);
+        for(const a of w.skills){
+          if(DEATH_KINDS[a.kind]) continue;                 // 复活 / 转生 / 自爆在死亡时触发
+          if(w.mirror) break;                               // 笔记：分身不会施放技能
+          // 分身在场上时本体不会再分身（要等分身消失或被击杀）
+          if(a.kind === "divide" && w.clones.some(c=>!c.done)) continue;
+          if(!a.started){
+            if(a.bands.indexOf(band) < 0) continue;          // 血量还不在允许的区间
+            a.started = true; a.timer = a.warmup;
+          }
+          if(a.timer > 0){ a.timer -= TICK; continue; }
+          if(a.cdLeft > 0){ a.cdLeft -= TICK; continue; }
+          // 发动的一瞬间也要检查血量区间：比如「闪烁」只允许 2~4 段（黄血以上），
+          // 红血（第 1 段）时不会再闪
+          if(a.bands.indexOf(band) < 0) continue;
+          if(w.cast || w.silenceT > 0 || w.stunT > 0) continue;
+          if(Math.random() >= a.prob) continue;              // 每帧按概率尝试，失败下一帧再试
+          a.cdLeft = a.cd;
+          if(a.castTime > 0) w.cast = { skill:a, left:a.castTime };
+          else castDone(w, a);
+        }
+      }
+      if(w.done) continue;                                   // 变身 / 转生后本体已经不在了
       let dot = 0;
       if(w.poisonT > 0){ w.poisonT -= TICK; if(w.poison) dot += w.poison.perSec; }
       w.burns = w.burns.filter(b=>b.until > t);
-      for(const b of w.burns) dot += b.perSec;
-      if(w.cuss && w.cuss.hits > 0 && w.cuss.until <= t){            // 诅咒到期结算
+      // 毒和燃烧可以同时生效（每秒会吃到多次多种 dot）；
+      // 但燃烧与冰霜减速是互斥的：同时生效时只有宝石等级（档位）高的那个起作用
+      const burnPerSec = w.burns.reduce((s,b)=>s + b.perSec, 0);
+      const burnTier = w.burns.reduce((s,b)=>Math.max(s, b.tier || 0), 0);
+      const slowTier = w.slowT > 0 ? (w.slowTier || 0) : 0;
+      const useBurn = burnTier >= slowTier;
+      const useSlow = slowTier >= burnTier;
+      dot += useBurn ? burnPerSec : 0;
+      if(w.cuss && w.cuss.until <= t){                               // 诅咒到期结算
         dot += w.cuss.hits * w.cuss.energy;
-        w.cuss.hits = 0;
+        const cp = wolfPoint(w);
+        wolves.forEach(o=>{                                          // 1000（1 格）内的狼被沉默 2 秒
+          if(o.done) return;
+          const q = wolfPoint(o);
+          if(Math.hypot(q[0]-cp[0], q[1]-cp[1]) <= 1){
+            o.silenceT = Math.max(o.silenceT, 2 * Math.max(0, 1 - (o.res.silence || 0)));
+            interrupt(o);
+          }
+        });
+        w.cuss = null;
       }
       if(dot > 0){
         w.hp -= dot*TICK; dmgDealt += dot*TICK;
-        if(w.hp <= 0){ w.hp = 0; w.done = true; killed++; continue; }
+        if(w.hp <= 0){ die(w); continue; }
       }
       // 抗冰可以超过 100%：减速会变成加速（超级抗冰的狼越被冰越跑得快）
-      const slowFactor = Math.max(0, 1 - w.slow*(1 - (w.res.frost || 0)));
+      const slowFactor = useSlow ? Math.max(0, 1 - w.slow*(1 - (w.res.frost || 0))) : 1;
+      if(w.stunT > 0){ w.stunT -= TICK; active++; continue; }        // 被眩晕：原地不动
+      if(w.tauntUntil > t){ active++; continue; }                    // 嘲讽中：停下来顶着
+      if(w.cast){ active++; continue; }                              // 施法中：定住不动，直到技能放完
       if(w.backT > 0){                                               // 胆怯：往回走
         w.backT -= TICK;
         w.pos = Math.max(0, w.pos - w.speed*TICK*0.8);
       }else{
-        w.pos += w.speed * TICK * slowFactor;
+        const run = (w.runUntil > t) ? w.runMul : 1;                 // 狂奔加速
+        // 笔记里的速度计算最后有一句 max(1, …)：速度有下限（1 单位/帧），
+        // 所以「怕冰」的狼被冰到 100% 以上时是几乎不动，而不是彻底停死
+        const minSpeed = UNIT * 25;
+        w.pos += Math.max(minSpeed, w.speed * slowFactor * run) * TICK;
       }
-      if(w.pos >= w.route.length - 1){ w.pos = w.route.length-1; w.leaked = true; w.done = true; continue; }
+      if(!w.stuck && w.pos >= w.route.length - 1){
+        w.pos = w.route.length - 1;
+        if(!w.mirror) w.leaked = true;      // 分身不会进村，走到村口就消失
+        w.done = true; continue;
+      }
+      // 弹簧：轻的狼踩在弹簧格上会被弹到随机的弹簧落点
+      // 爆炸箱：狼撞上去 = 狼后退一格 + 箱子被往狼的前进方向推一格；推满 4 次箱子爆炸
+      if(boxes.size && !w.fly){
+        const idx = Math.min(Math.floor(w.pos), w.route.length-1);
+        const cell = w.route[idx];
+        const ck = cell[0] + "_" + cell[1];
+        const box = boxes.get(ck);
+        if(box && w.lastBox !== ck){
+          w.lastBox = ck;
+          const prev = w.route[Math.max(0, idx-1)];
+          const dr = Math.sign(cell[0]-prev[0]), dc = Math.sign(cell[1]-prev[1]);
+          const tr = box.r + dr, tc = box.c + dc;
+          const t = (tr>=0 && tc>=0 && tr<m.rows && tc<m.cols) ? cellType(m,tr,tc) : 0;
+          if((t===1 || t===7) && !buildingAt(tr,tc) && !boxes.has(tr+"_"+tc)){
+            boxes.delete(ck);                      // 箱子往狼走的方向推一格
+            box.r = tr; box.c = tc;
+            boxes.set(tr+"_"+tc, box);
+          }
+          box.n++;
+          if(box.n >= BOX_PUSH_LIMIT){ boxes.delete(box.r+"_"+box.c); bump(w, "爆炸箱"); }
+          w.pos = Math.max(0, w.pos - 1);          // 狼被弹后退一格
+        }
+      }
+      if(springCells.size && landCells.length && isLight(w)){
+        const cell = w.route[Math.min(Math.floor(w.pos), w.route.length-1)];
+        const ck = cell[0] + "_" + cell[1];
+        const st = springState[ck] || (springState[ck] = {t:-99, n:0});
+        if(springCells.has(ck) && w.lastSpring !== ck && st.n < SPRING_MAX && t - st.t >= SPRING_CD){
+          w.lastSpring = ck;
+          st.t = t; st.n++;
+          const land = landCells[Math.floor(Math.random()*landCells.length)];
+          const np = reRoute(land, w.fly);
+          if(np && np.length > 1){          // 落到落点后从这里继续找路去村口
+            w.route = np.slice(1);
+            w.pos = 0;
+          }else{                            // 落点被围死：原地不动，但仍然会被塔当作目标
+            w.route = [land];
+            w.pos = 0;
+            w.stuck = true;
+          }
+          bump(w, "弹簧");
+        }
+      }
       active++;
     }
-    if(active === 0) break;
+    // 先把这一帧新出现的狼（变身 / 召唤 / 转生 / 分身）放进场，
+    // 否则最后一只狼变身时场上会「空一秒」，模拟就提前结束了
+    let spawned = 0;
+    if(pending.length){ pending.forEach(o=>{ wolves.push(o); spawned++; }); pending.length = 0; }
+    if(active === 0 && spawned === 0) break;
+    // 记录这一帧：只记还在图上（没死、没进村）的狼
+    // 动画每 0.08 秒记一帧就够了（狼一帧走不到 0.05 格），帧数减半动画也更流畅
+    if(Math.round(t/TICK) % 2 === 0){
+      // 被乌云 / 自爆罩住的塔这一帧要画成纯灰色
+      const cloud = towers.filter(T=>T.cloudT > t).map(T=>[T.r, T.c]);
+      record.push({ t: t, cloud: cloud.length ? cloud : null, list: wolves.map((w,wi)=>{
+        if(w.done) return null;                 // 已经进村 / 被打死的狼不再画
+        if(t < w.spawn) return null;            // 还没出狼口的狼不要堆在出口那一格上
+        const p = wolfPoint(w);
+        // r/c 就是地图的行列，和走狼路线用的是同一套坐标
+        return { k:wi, r:p[0], c:p[1], name:w.name, fly:!!w.fly, hp:Math.max(0,Math.round(w.hp)),
+                 hide: w.hideUntil > t || inPyramid(m, w), silence: w.silenceT > 0, boss: !!w.boss };
+      }).filter(Boolean) });
+    }
     for(const T of towers){
-      T.cd -= TICK;
+      if(T.cloudT > t) continue;                       // 被乌云罩住的塔：休息
+      T.cd -= TICK * rateMul(T);                       // 减速粒子会拖慢攻速
       if(T.cd > 0) continue;
-      let best = null;
+      // inAll = 射程内的所有狼（含隐身）；inVis = 没隐身的狼（塔的索敌只能选这些）
+      const inAll = [], inVis = [];
       for(const w of wolves){
         if(w.done || t < w.spawn) continue;
         if(!canHitAir(T, w)) continue;             // 飞行狼：炮塔、波动塔打不到
         const p = wolfPoint(w);
         if(!inRange(m, [T.r, T.c], T.info, p[0], p[1])) continue;
-        if(!best || w.pos > best.pos) best = w;
+        w._d = Math.hypot(p[0]-(T.r+0.5), p[1]-(T.c+0.5));
+        inAll.push(w);
+        if(w.hideUntil <= t && !inPyramid(m, w)) inVis.push(w);   // 隐身 / 在金字塔里：选不中
       }
-      if(!best){ T.cd = 0; continue; }
+      if(!inAll.length){ T.cd = 0; continue; }
+      // 黄宝石镶嵌塔是闪光攻击：直接打范围内所有狼，不需要索敌
+      if(!T.field && !inVis.length){ T.cd = 0; continue; }
+      // 笔记「攻击检查」：重新选目标时取距离最近的狼；嘲讽中的狼会强行把目标拉过去
+      inAll.sort((a,b)=>a._d-b._d);
+      inVis.sort((a,b)=>a._d-b._d);
+      const taunter = inVis.find(w=>w.tauntUntil > t);
+      if(taunter){
+        inVis.splice(inVis.indexOf(taunter), 1);
+        inVis.unshift(taunter);
+      }
       T.cd = T.interval;
-      const mul = best.fly ? T.airMul : 1;         // 散弹塔打飞行狼翻倍
-      const res = best.res || {};
-      let dmg = T.dmg*mul;
-      if(T.elec) dmg *= Math.max(0, 1 - (res.light || 0));      // 免疫电：完全无视闪电攻击
-      if(T.crit && Math.random() < T.crit.chance) dmg *= T.crit.mul;
-      best.hp -= dmg; dmgDealt += dmg;
-      if(T.slow){ best.slow = Math.max(best.slow, T.slow/100*mul); best.slowT = 3; }
-      if(T.poison){
-        const ps = { perSec: T.poison.perSec*mul*Math.max(0, 1 - (res.poison || 0)), dur: T.poison.dur*mul };
-        if(!best.poison || ps.perSec > best.poison.perSec) best.poison = ps;
-        best.poisonT = T.poison.dur;
+      const first = T.field ? inAll[0] : inVis[0];
+      const hit = (w, dmg, withEffect)=>{
+        const res = w.res || {};
+        if(T.elec) dmg *= Math.max(0, 1 - (res.light || 0));   // 免疫电：完全无视闪电攻击
+        if(T.light) dmg *= Math.max(0, 1 - (res.light || 0));  // 光塔：抗光减伤 / 怕光增伤
+        if(withEffect && T.crit && Math.random() < T.crit.chance*Math.max(0, 1 - (res.crit || 0))) dmg *= T.crit.mul;
+        if(w.dr > 0) dmg *= (1 - w.dr);                        // 无敌（如 dio 的 99% 减伤）
+        if(w.shield && w.shield.until > t) dmg *= (1 - w.shield.red);   // 护盾减伤
+        // 灵魂治愈：附近的治疗狼替它扛一部分伤害
+        const wp = wolfPoint(w);
+        const linker = linkers.find(o=>{
+          if(o === w) return false;
+          const q = wolfPoint(o);
+          return Math.hypot(q[0]-wp[0], q[1]-wp[1]) <= 3;
+        });
+        if(linker){
+          const part = dmg * linker.linksRatio;
+          dmg -= part;
+          linker.hp -= part; dmgDealt += part;
+          if(linker.hp <= 0) die(linker);
+        }
+        w.hp -= dmg; dmgDealt += dmg;
+        if(w.hp <= 0) die(w);
+        if(!withEffect) return;
+        const mul = w.fly ? T.airMul : 1;
+        if(T.slow){
+          const tier = T.gemTier;
+          if(!(w.slowT > 0) || tier >= (w.slowTier || 0)){ w.slow = T.slow/100*mul; w.slowTier = tier; }
+          else w.slow = Math.max(w.slow, T.slow/100*mul);
+          w.slowT = 3;
+        }
+        if(T.poison){
+          const ps = { perSec: T.poison.perSec*mul*Math.max(0, 1 - (res.poison || 0)), dur: T.poison.dur*mul };
+          if(!w.poison || ps.perSec > w.poison.perSec) w.poison = ps;
+          w.poisonT = T.poison.dur;
+        }
+        if(T.burn) w.burns.push({ perSec: T.burn.perSec*mul*Math.max(0, 1 - (res.fire || 0)),
+                                  until: t + T.burn.dur*mul, tier: T.gemTier });
+        // 飞行狼：黄宝石炮塔的溅射眩晕几乎不吃（1%），黄宝石波动塔的眩晕完全不吃
+        const vChance = T.vertigo ? T.vertigo.chance *
+          (w.fly ? (T.towerName === "炮塔" ? 0.01 : 0) : 1) *
+          Math.max(0, 1 - (res.vertigo || 0)) : 0;
+        if(T.vertigo && Math.random() < vChance){
+          w.stunT = Math.max(w.stunT, T.vertigo.dur);
+          interrupt(w);                                   // 眩晕：强制打断非瞬发技能
+        }
+        if(T.timid && Math.random() < T.timid.chance){ w.backT = T.timid.dur; interrupt(w); }
+        if(T.knock && Math.random() < T.knock*Math.max(0, 1 - (res.beat || 0))){
+          w.pos = Math.max(0, w.pos - 1);
+          interrupt(w);                                   // 超长距离击退：打断非瞬发技能
+        }
+        if(T.cuss){
+          // 黑宝石镶嵌：命中即挂 5 秒诅咒，诅咒结束时按「期间被击中的次数 × 诅咒能量」结算
+          const energy = T.cuss * (T.level || 1);
+          if(!w.cuss || w.cuss.until <= t) w.cuss = { until: t + 5, energy, hits: 0 };
+          else w.cuss.energy = Math.max(w.cuss.energy, energy);
+          w.cuss.hits++;
+        }
+      };
+      if(T.field){                             // 黄宝石镶嵌塔：闪光攻击，范围内所有狼（含隐身）都吃一发
+        inAll.forEach(w=> hit(w, T.dmg*(w.fly?T.airMul:1), true));
+      }else if(T.towerName === "波动塔"){       // 波动塔：十字贯穿一串（含隐身狼），笔记里贯穿数 = 10
+        inAll.slice(0, 10).forEach(w=> hit(w, T.dmg*(w.fly?T.airMul:1), true));
+      }else if(T.multi > 0){                   // 散弹塔：同时对最近的 3 个目标开火
+        inVis.slice(0, T.multi).forEach(w=> hit(w, T.dmg*(w.fly?T.airMul:1), true));
+      }else{
+        hit(first, T.dmg*(first.fly?T.airMul:1), true);
       }
-      if(T.burn) best.burns.push({ perSec: T.burn.perSec*mul*Math.max(0, 1 - (res.fire || 0)), until: t + T.burn.dur*mul });
-      if(T.vertigo && Math.random() < T.vertigo.chance*Math.max(0, 1 - (res.vertigo || 0))){
-        best.stunT = Math.max(best.stunT, T.vertigo.dur);       // 眩晕：停 2 秒
+      // 溅射（炮塔）：主目标周围的狼各吃一份按比例衰减的伤害；隐身狼躲不掉溅射
+      if(!T.field && T.aoe && T.aoe.radii > 0 && T.aoe.rate > 0){
+        const rad = T.aoe.radii/1000, p0 = wolfPoint(first);
+        inAll.forEach(w=>{
+          if(w === first) return;
+          const p = wolfPoint(w);
+          if(Math.hypot(p[0]-p0[0], p[1]-p0[1]) <= rad) hit(w, T.dmg*T.aoe.rate*(w.fly?T.airMul:1), true);
+        });
       }
-      if(T.timid && Math.random() < T.timid.chance) best.backT = T.timid.dur;   // 胆怯：往回走
-      if(T.knock && Math.random() < T.knock) best.pos = Math.max(0, best.pos - 1);  // 击退
-      if(T.cuss){                                              // 黑宝石诅咒
-        if(!best.cuss || best.cuss.until <= t) best.cuss = { until: t + 5, energy: T.cuss*(T.level||1), hits: 1 };
-        else best.cuss.hits++;
+      // 闪电弹射（紫宝石镶嵌塔）：每次攻击弹射 n 次，
+      // 第 k 个被弹到的目标伤害 = 基础伤害 × (1 - 递减)^k（隐身中的狼打不到）
+      if(T.chain && T.chain.n > 0){
+        const p0 = wolfPoint(first);
+        inVis.map(w=>({w, d:Math.hypot(wolfPoint(w)[0]-p0[0], wolfPoint(w)[1]-p0[1])}))
+          .filter(o=>o.w !== first && o.d <= 2.5).sort((a,b)=>a.d-b.d).slice(0, T.chain.n)
+          .forEach((o,i)=> hit(o.w, T.dmg*Math.pow(1-T.chain.dec, i+1)*(o.w.fly?T.airMul:1), true));
       }
-      if(best.hp <= 0){ best.hp = 0; best.done = true; killed++; }
+      wolves.forEach(w=>{ if(!w.done && w.hp <= 0) die(w); });
     }
   }
+  // 到时间自己消失的分身不算战果，统计里排除掉
+  const stat = wolves.filter(w=>!(w.mirror && !w.dead));
   const byType = {};
-  wolves.forEach(w=>{
+  stat.forEach(w=>{
     const k = w.name;
     byType[k] = byType[k] || { kill:0, leak:0, leakHp:0, hpMax:w.hpMax };
     if(w.leaked){ byType[k].leak++; byType[k].leakHp += w.hp; }
@@ -1250,10 +2358,111 @@ function simulateWalk(){
   });
   return {
     wave, wolves, byType, killed, towers: towers.length,
-    leaked: wolves.filter(w=>w.leaked).length,
-    leakHp: wolves.filter(w=>w.leaked).reduce((s,w)=>s+w.hp,0),
+    total: stat.length, mirrors: wolves.length - stat.length,
+    leaked: stat.filter(w=>w.leaked).length,
+    leakHp: stat.filter(w=>w.leaked).reduce((s,w)=>s+w.hp,0),
     dmgDealt: Math.round(dmgDealt), time: t,
+    record: record, skillLog: castLog, flyers: wolves.filter(w=>w.fly).length,
   };
+}
+/* ---------- 走狼动画回放 ---------- */
+let playback = null;
+function playSim(res){
+  if(!res || res.err || !res.record || !res.record.length){ playback = null; renderSim(res); return; }
+  const sp = document.getElementById("simSpeed");
+  playback = {
+    rec: res.record, res: res, t: 0,
+    speed: sp ? (+sp.value || 2) : 2,
+    last: performance.now(),
+    frame: res.record[0],
+    angles: {},
+  };
+  document.getElementById("btnSim").textContent = "停止模拟";
+  document.getElementById("simResult").innerHTML =
+    '<span class="note">走狼动画播放中（'+(playback.speed)+'× 倍速）</span>';
+  requestAnimationFrame(playFrame);
+}
+function stopPlayback(){
+  if(!playback) return;
+  const res = playback.res;
+  playback = null;
+  document.getElementById("btnSim").textContent = "模拟走狼";
+  renderSim(res);
+  draw();
+}
+function playFrame(now){
+  const P = playback;
+  if(!P) return;
+  const dt = Math.min(0.2, (now - P.last) / 1000);
+  P.last = now;
+  P.t += dt * P.speed;
+  const rec = P.rec;
+  let i = P.i == null ? 0 : P.i;
+  while(i + 1 < rec.length && rec[i+1].t <= P.t) i++;
+  P.i = i;
+  P.frame = rec[i];
+  setHint("走狼动画 "+P.t.toFixed(1)+" 秒 / 共 "+rec[rec.length-1].t.toFixed(1)+" 秒，图上的狼 "+P.frame.list.length+" 只");
+  draw();
+  if(P.t < rec[rec.length-1].t && playback === P) requestAnimationFrame(playFrame);
+  else if(playback === P){
+    playback = null;
+    document.getElementById("btnSim").textContent = "模拟走狼";
+    renderSim(P.res);
+    draw();
+  }
+}
+/* 把当前帧的狼画成小三角，下面写狼种 */
+function drawWolves(){
+  if(!playback) return;
+  const f = playback.frame;
+  if(!f) return;
+  const rec = playback.rec, prevF = playback.i > 0 ? rec[playback.i-1] : null;
+  f.list.forEach(w=>{
+    // 行 → 纵坐标，列 → 横坐标（和格子的画法保持一致，狼才会走在描出来的路线上）
+    const cx = PAD + (w.c + 0.5) * CELL, cy = PAD + (w.r + 0.5) * CELL;
+    // 用上一帧的位置算朝向；瞬移（闪烁、弹簧、传送）时保持原朝向，不突然扭头
+    let ang = playback.angles[w.k] || 0;
+    const prev = prevF && prevF.list.find(p=>p.k === w.k);
+    if(prev){
+      const dr = w.r - prev.r, dc = w.c - prev.c;
+      if(dr*dr + dc*dc <= 2.25 && (dr !== 0 || dc !== 0)) ang = Math.atan2(dr, dc);
+    }
+    playback.angles[w.k] = ang;
+    const s = Math.max(5, CELL * 0.32);
+    const size = w.boss ? s*1.75 : s;          // 随机 Boss 的三角比其它狼大一圈
+    ctx.save();
+    ctx.globalAlpha = w.hide ? 0.35 : 1;      // 隐身中的狼画成半透明
+    ctx.translate(cx, cy);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size*0.75, size*0.6);
+    ctx.lineTo(-size*0.75, -size*0.6);
+    ctx.closePath();
+    ctx.fillStyle = w.fly ? "#8ecbff" : "#ffd24d";
+    ctx.fill();
+    ctx.strokeStyle = "#000000cc"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+    if(w.boss){                                // 随机 Boss：外面再套一圈红色虚线
+      ctx.save();
+      ctx.globalAlpha = w.hide ? 0.4 : 1;
+      ctx.setLineDash([Math.max(3, CELL*0.16), Math.max(2, CELL*0.12)]);
+      ctx.strokeStyle = "#ff3b30"; ctx.lineWidth = Math.max(1.6, CELL*0.07);
+      ctx.beginPath(); ctx.arc(cx, cy, size*1.5, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    const fs = Math.max(9, Math.round(CELL*0.24));
+    ctx.save();
+    ctx.globalAlpha = w.hide ? 0.4 : 1;
+    ctx.font = fs+"px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.lineWidth = 3; ctx.strokeStyle = "#0d1215dd";
+    ctx.strokeText(w.name, cx, cy + s*0.75);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(w.name, cx, cy + s*0.75);
+    ctx.restore();
+  });
 }
 function renderSim(res){
   const box = document.getElementById("simResult");
@@ -1266,21 +2475,32 @@ function renderSim(res){
     return '<div class="kv"><span>'+k+'（'+fmt(v.hpMax)+' 血）</span><span>'+tag+'</span></div>';
   }).join("");
   const ok = res.leaked === 0;
+  const total = res.total != null ? res.total : res.wolves.length;
   box.innerHTML =
     '<div class="'+(ok?'ok':'warn')+'" style="font-weight:600">'+
-      (ok ? '√ 这波全部拦下（'+res.wolves.length+' 只）'
+      (ok ? '√ 这波全部拦下（'+total+' 只）'
           : '× 有 '+res.leaked+' 只进村，共带进 '+fmt(Math.round(res.leakHp))+' 血')+
     '</div>'+
-    '<div class="kv"><span>击杀 / 总数</span><b>'+res.killed+' / '+res.wolves.length+'</b></div>'+
+    '<div class="kv"><span>击杀 / 总数</span><b>'+res.killed+' / '+total+
+      (res.mirrors ? '（另有分身 '+res.mirrors+' 只，到时间自己消失）' : '')+'</b></div>'+
     '<div class="kv"><span>塔造成总伤害</span><b>'+fmt(res.dmgDealt)+'</b></div>'+
     '<div class="kv"><span>模拟用时</span><b>'+res.time.toFixed(1)+' 秒</b></div>'+
-    '<div style="margin-top:4px">'+rows+'</div>'+
-    '<div class="note" style="margin-top:4px">'+
-    '已计入：塔的攻击力 / 攻速 / 射程（含雕像加成、黑宝石近处盲区、波动塔十字阻挡）、'+
-    '狼的冰霜 / 光 / 毒 / 火抗性与免疫电、减速（抗冰可超过 100%，会变成提速）、'+
-    '毒性伤害、燃烧、诅咒、暴击、眩晕、胆怯、击退，以及飞行（炮塔/波动塔打不到，散弹塔翻倍）。</div>'+
-    '<div class="warn" style="margin-top:4px">数据保守，仅供参考：未计入狼的隐身、狂奔、召唤、复活、护盾、'+
-    '群体治疗等技能，也未计入传送带、火山 / 反应炉等地形与塔的攻速加成。</div>';
+    '<div style="margin-top:4px">'+rows+'</div>'+skillRow(res)+
+    '<div class="warn" style="margin-top:4px">数据保守，仅供参考（数据来源：羊村百科）</div>';
+}
+/* 技能发动统计：让「隐身到底有没有发动」一眼看得出来 */
+function skillRow(res){
+  const log = res.skillLog || {};
+  const keys = Object.keys(log);
+  if(!keys.length) return '<div class="note" style="margin-top:4px">这波狼没有发动技能。</div>';
+  const order = ["隐身","狂奔","闪烁","护盾","群疗","召唤","分身","重生","转生","自爆","乌云","嘲讽","灵魂治愈","变身"];
+  keys.sort((a,b)=>{
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    return (ia<0?99:ia) - (ib<0?99:ib);
+  });
+  return '<div class="note" style="margin-top:4px">狼技能发动：'+
+    keys.map(k=>k+"×"+log[k]).join("、")+
+    (res.flyers ? '（本波会飞的狼 '+res.flyers+' 只）' : '')+'</div>';
 }
 function wolfName(id){ return (D.wolfs[id]||{}).name || id; }
 function simScore(){
@@ -1308,6 +2528,32 @@ function renderWolfPanel(){
   // 大本营防线不做模拟出狼
   document.getElementById("simSection").style.display = (m.chapter===0) ? "none" : "block";
   if(m.chapter===0) return;
+  // 自定义地图：自己加狼
+  document.getElementById("customWolfBox").style.display = m.custom ? "block" : "none";
+  if(m.custom){
+    const sel = document.getElementById("cwSelect");
+    if(!sel.options.length){
+      sel.innerHTML = Object.keys(D.wolfs)
+        .filter(id=>!id.startsWith("D_"))
+        .sort((a,b)=>wolfName(a).localeCompare(wolfName(b), "zh"))
+        .map(id=>'<option value="'+id+'">'+wolfName(id)+'</option>').join("");
+    }
+    document.getElementById("wolfTags").innerHTML =
+      '<span class="note">自定义地图：用右侧下方的下拉框加狼（种类 + 血量都能自己定）。</span>';
+    const list = ((customDef(m)||{}).wolves || []);
+    const scoreEl2 = document.getElementById("simScore");
+    scoreEl2.max = m.wolf.scoreMax || 0;
+    document.getElementById("simScoreMax").textContent = "／上限 " + (m.wolf.scoreMax||0);
+    document.getElementById("simLevel").textContent = "—";
+    document.getElementById("simHpList").innerHTML = list.length
+      ? list.map(e=>wolfName(e.id)+" "+(e.hp||0)).join("、") : "—";
+    if(!document.getElementById("simDiff").options.length){
+      document.getElementById("simDiff").innerHTML =
+        Object.keys(D.waveDiff).map(k=>'<option value="'+k+'">'+k+' '+D.waveDiff[k]+'</option>').join("");
+      document.getElementById("simDiff").value = "1.0";
+    }
+    return;
+  }
   const tags = document.getElementById("wolfTags");
   const scoreEl = document.getElementById("simScore");
   const diffEl = document.getElementById("simDiff");
@@ -1340,10 +2586,24 @@ function renderWolfPanel(){
 }
 /* 和羊村百科「波工具」一样的抽法：按 pop 预算从本图狼里抽满一波 */
 let lastWave = null;
+let lastBoss = null;
 function generateWave(){
   const m = cur(), cfg = m.wolf;
+  // 自定义地图：直接按用户加的狼出
+  if(m.custom){
+    const list = ((customDef(m)||{}).wolves || []);
+    if(!list.length) return null;
+    const out = [];
+    list.forEach(e=>{ for(let i=0;i<(e.n||1);i++) out.push({ id:e.id, hp:Math.max(1, e.hp||1000) }); });
+    return {
+      list: out, custom:true, level:0, diff:1, total: out.length,
+      ids: list.map(e=>({ id:e.id, n:e.n||1, hp:Math.max(1, e.hp||1000) })),
+    };
+  }
   if(!cfg || !cfg.prop.length) return null;
-  const cand = cfg.prop.map(([p,id])=>({ prop:p, id, pop:(D.wolfs[id]||{}).pop||1 }));
+  const L0 = simLevel(), d0 = simDiff();
+  const cand = cfg.prop.map(([p,id])=>({ prop:p, id, pop:(D.wolfs[id]||{}).pop||1,
+                                         hp: wolfHp(id, L0, d0) }));
   const n0 = cand.length;
   const counts = new Array(n0).fill(0);
   const list = [];
@@ -1371,7 +2631,9 @@ function renderWave(){
   const w = lastWave;
   if(!w){ box.innerHTML = '<span class="note">点「随机生成一波」抽一波狼，再点「模拟走狼」看能不能守住。</span>'; return; }
   const parts = w.ids.filter(t=>t.n>0).map(t=>wolfName(t.id)+" ×"+t.n+"（单只 "+fmt(t.hp)+"）");
-  const sumHp = w.ids.reduce((s,t)=>s+t.n*t.hp, 0);
+  if(w.bossEntry) parts.push('<b>'+wolfName(w.bossEntry.id)+' ×1（单只 '+fmt(w.bossEntry.hp)+'）· 随机 Boss'+
+    (w.bossIndex != null ? '，第 '+(w.bossIndex+1)+' 只出' : '')+'</b>');
+  const sumHp = w.ids.reduce((s,t)=>s+t.n*t.hp, 0) + (w.bossEntry ? w.bossEntry.hp : 0);
   box.innerHTML =
     '<div class="kv"><span>狼等级 L</span><b>'+w.level.toFixed(2)+'（难度 '+w.diff+' '+(D.waveDiff[String(w.diff)]||"")+'）</b></div>'+
     '<div class="kv"><span>波内狼数</span><b>'+w.total+' 只</b></div>'+
@@ -1382,17 +2644,48 @@ function renderWave(){
 function selectMap(i){
   state.mapIdx = i; state.selBuilding = null; undoStack.length = 0;
   lastWave = null;
+  lastBoss = null;
   const m = cur();
   state.chapter = m.chapter;
+  if(m.custom) syncCustomSize(m);
   state.align = rec(m).align || {x:0,y:0,s:100};
   document.getElementById("alX").value = state.align.x;
   document.getElementById("alY").value = state.align.y;
   document.getElementById("alS").value = state.align.s;
   document.getElementById("seedBox").value = "";
   document.getElementById("seedHint").textContent = "";
+  document.getElementById("bossResult").innerHTML = "";
+  renderSim(null);
   loadBaseImage(); fitCanvas(); draw();
   renderChapters(); renderMapList(); renderStats(); renderNotes(); renderSpecs(); checkPath();
-  renderLegend(); renderWolfPanel(); renderWave();
+  renderLegend(); renderWolfPanel(); renderWave(); renderCustom();
+}
+/* 自定义地图的尺寸 / 出狼编辑 */
+function syncCustomSize(m){
+  const r = rec(m);
+  const c = customDef(m) || {};
+  if(c.cols && c.rows && (c.cols !== m.cols || c.rows !== m.rows)){
+    m.cols = c.cols; m.rows = c.rows;
+    m.grid = Array.from({length:c.rows}, ()=>"1".repeat(c.cols));
+    r.terrain = {};
+    r.layout = [];
+  }
+  if(c.scoreMax) m.wolf.scoreMax = c.scoreMax;
+  if(c.labels) m.labels = Object.assign({}, c.labels);
+}
+function renderCustom(){
+  const m = cur();
+  const box = document.getElementById("customBox");
+  box.style.display = m.custom ? "block" : "none";
+  if(!m.custom) return;
+  document.getElementById("cusCols").value = m.cols;
+  document.getElementById("cusRows").value = m.rows;
+  document.getElementById("cusName").value = m.name;
+  document.getElementById("cwScore").value = m.wolf.scoreMax || 100;
+  const list = (customDef(m) || {}).wolves || [];
+  document.getElementById("cwList").innerHTML = list.length
+    ? "本图出狼：" + list.map((e,i)=>(i+1)+"."+wolfName(e.id)+"×"+(e.n||1)+"（"+(e.hp||0)+" 血）").join("　")
+    : "还没有加入狼，用上面的下拉框挑狼种 + 填血量，再点「加入」。";
 }
 
 /* ================= 放置 / 编辑 ================= */
@@ -1427,7 +2720,11 @@ function place(r,c){
 /* 所有出狼口“箭头方向第 1 格”的集合（这些格子不能建东西） */
 function entranceFrontKeys(m){
   const set = new Set();
-  entryGroups(m).entrances.forEach(e=>{ if(e.front) set.add(e.front[0]+"_"+e.front[1]); });
+  // 只有「画了箭头」的出狼口才锁死正前方；没画箭头的（麦恩矿山、缠怨谷）四向皆可，
+  // 任何方向都可以被建筑/障碍挡住，只要还留着一个方向能出去就行
+  entryGroups(m).entrances.forEach(e=>{
+    if(e.dir && e.front) set.add(e.front[0]+"_"+e.front[1]);
+  });
   return set;
 }
 function erase(r,c){
@@ -1465,6 +2762,7 @@ function evtCell(ev){
 }
 let dragging = null;
 let painting = false;
+let mousePos = null;          // 光标在画布里的位置（用来画跟随光标预览）
 cv.addEventListener("mousedown", ev=>{
   const {r,c} = evtCell(ev);
   if(state.tool==="align"){ dragging = {x:ev.clientX, y:ev.clientY, ax:state.align.x, ay:state.align.y}; return; }
@@ -1472,8 +2770,9 @@ cv.addEventListener("mousedown", ev=>{
   if(ev.button===2 || state.tool==="erase"){ erase(r,c); return; }
   if(state.tool==="select"){
     const b = buildingAt(r,c);
-    state.selBuilding = b ? {r,c} : null;
-    renderStats(); draw(); return;
+    if(b) selectBuilding(r,c);
+    else { state.selBuilding = null; renderStats(); draw(); }
+    return;
   }
   if(state.tool==="terrain"){
     snapshot();
@@ -1481,6 +2780,9 @@ cv.addEventListener("mousedown", ev=>{
     save(); draw(); renderStats(); checkPath(); return;
   }
   if(ev.ctrlKey){ painting = true; snapshot(); }   // Ctrl+左键拖动 = 连续造同样的塔（整批只记一次撤销）
+  // 点已有建筑 = 选中它并把参数同步到左边（之后改左边参数会直接套用到它）
+  // 想用当前配置覆盖这座建筑：按住 Shift 点它
+  if(!ev.ctrlKey && !ev.shiftKey && buildingAt(r,c)){ selectBuilding(r,c); return; }
   place(r,c);
   if(painting) setHint("连续造塔中：拖动鼠标继续放同样的塔，松开停止");
 });
@@ -1500,6 +2802,9 @@ cv.addEventListener("contextmenu", ev=>ev.preventDefault());
 cv.addEventListener("mousemove", ev=>{
   const {r,c} = evtCell(ev);
   const m = cur();
+  const rect = cv.getBoundingClientRect();
+  mousePos = {x: ev.clientX-rect.left, y: ev.clientY-rect.top};
+  if(state.tool === "build") draw();          // 更新跟随光标的塔预览
   if(r<0||c<0||r>=m.rows||c>=m.cols){ setHint(""); return; }
   if(painting && state.tool==="build"){          // Ctrl 拖动连续造塔
     const last = rec().layout[rec().layout.length-1];
@@ -1511,6 +2816,33 @@ cv.addEventListener("mousemove", ev=>{
   let s = "第 "+(r+1)+" 行 第 "+(c+1)+" 列 · " + (villageArea ? "羊村范围（不可通行、不可建塔）" : TYPE_NAME[t]);
   const lab = m.labels[r+"_"+c];
   if(lab) s += " · "+lab;
+  const ft = (m.feat||{})[r+"_"+c];
+  if(t === 4 || t === 5){                       // 传送阵：标出颜色，方便知道哪个对哪个
+    const g = teleGroupOf(m, r, c) || {label:"同色", in:[], out:[]};
+    s += " · " + g.label + "传送阵（" + (t===4 ? "入口" : "出口") + "）：本图这组有 " +
+         g.in.length + " 个入口、" + g.out.length + " 个出口，踩到这一组的入口会被送到同一组的出口";
+  }
+  if(ft){
+    s += " · 特殊地形：" + ft;
+    if(ft === "传送带"){
+      const d = ((m.belt||{})[r+"_"+c]) || "";
+      s += "（方向 " + ({left:"←",right:"→",up:"↑",down:"↓"}[d] || "未知") +
+           "，与狼走的方向相同会加速、相反会减速）";
+    }
+    if(ft === "弹簧") s += "（轻的狼踩上去会被弹到随机落点，沉重的狼不受影响）";
+  }
+  if((m.marks||{})[r+"_"+c] === "\u203b"){
+    s += (ft === "钢网桥" || ft === "有洞的钢网桥")
+      ? " · 弹簧落点（在钢网桥上，不能布防，是弹簧的落点之一）"
+      : " · 弹簧落点（不在钢网桥上，可以布防；建了建筑后就不再作为落点）";
+  }
+  const pyr = (m.pyramid||{})[r+"_"+c];
+  if(pyr){
+    const word = pyr.map(d=>d==="right" ? "向右" : d==="up" ? "向上" : d).join(" / ");
+    s += " · 金字塔通道：只允许"+word+"通过（不能逆行）";
+  }
+  if(t===2 && !lab) s += " · 图册没画箭头：四个方向都可以出狼（会被建筑和障碍挡住）";
+  if(t===3 && lab && !arrowOf(lab)) s += " · 图册没画箭头：四个方向都可以进村";
   if(b){
     if(b.kind==="special") s += " · "+b.spec;
     else{
@@ -1526,8 +2858,21 @@ cv.addEventListener("mousemove", ev=>{
   }
   setHint(s);
 });
-cv.addEventListener("mouseleave", ()=>setHint(""));
+cv.addEventListener("mouseleave", ()=>{ mousePos = null; setHint(""); draw(); });
 cv.addEventListener("wheel", ev=>{
+  // 造塔时滚轮切换塔的类型
+  if(state.tool === "build"){
+    ev.preventDefault();
+    const i = TOWER_ORDER.indexOf(state.sel.tower);
+    const n = (i + (ev.deltaY > 0 ? 1 : -1) + TOWER_ORDER.length) % TOWER_ORDER.length;
+    state.sel.kind = "tower";
+    state.sel.tower = TOWER_ORDER[n];
+    syncLevel();
+    renderTowers(); renderSpecs(); renderSel();
+    setHint("滚轮切换：现在选中 "+state.sel.tower+"（上限 "+MAXLV[state.sel.tower]+" 级）");
+    draw();
+    return;
+  }
   if(state.tool!=="align") return;
   ev.preventDefault();
   state.align.s = Math.max(40, Math.min(300, state.align.s * (ev.deltaY<0?1.06:0.94)));
@@ -1548,12 +2893,18 @@ function unb64url(str){
 }
 function checksum(bytes){
   let h = 2166136261;
+  for(const b of bytes){ h ^= b; h = Math.imul(h, 16777619) >>> 0; }
+  return h & 0xffff;
+}
+/* 旧版本用了浮点乘法，会有误差；这里照样算一遍，好让以前发出去的种子码还能用 */
+function checksumOld(bytes){
+  let h = 2166136261;
   for(const b of bytes){ h ^= b; h = (h*16777619) >>> 0; }
   return h & 0xffff;
 }
 function makeSeed(){
   const m = cur(), R = rec(m);
-  const bytes = [1, m.no];
+  const bytes = [1, m.custom ? 0 : (m.no || 0)];
   const layout = R.layout;
   bytes.push(layout.length & 255, (layout.length>>8)&255);
   layout.forEach(b=>{
@@ -1583,10 +2934,11 @@ function loadSeed(text){
     if(bytes.length < 9) throw new Error("种子码长度不对");
     const sum = bytes[bytes.length-2] | (bytes[bytes.length-1]<<8);
     const body = bytes.slice(0,-2);
-    if(checksum(body) !== sum) throw new Error("种子码校验失败，可能复制不全或被改过");
+    if(checksum(body) !== sum && checksumOld(body) !== sum)
+      throw new Error("种子码校验失败，可能复制不全或被改过");
     if(body[0] !== 1) throw new Error("种子码版本不支持");
     const no = body[1];
-    const map = D.maps.find(m=>m.no===no);
+    const map = no === 0 ? D.maps.find(m=>m.custom) : D.maps.find(m=>m.no===no);
     if(!map) throw new Error("种子码里的地图编号 "+no+" 不存在");
     let p = 2;
     const count = body[p] | (body[p+1]<<8); p += 2;
@@ -1637,9 +2989,14 @@ document.querySelectorAll("#toolList .tool").forEach(b=>b.onclick=()=>{
 });
 document.getElementById("tgBase").onclick = e=>{ state.showBase=!state.showBase; e.target.classList.toggle("on",state.showBase); draw(); };
 document.getElementById("tgPath").onclick = e=>{ state.showPath=!state.showPath; e.target.classList.toggle("on",state.showPath); draw(); };
+document.getElementById("tgFly").onclick = e=>{ state.showFly=!state.showFly; e.target.classList.toggle("on",state.showFly); draw(); };
 document.getElementById("tgRange").onclick = e=>{ state.showRange=!state.showRange; e.target.classList.toggle("on",state.showRange); draw(); };
 document.getElementById("tgGrid").onclick = e=>{ state.showGrid=!state.showGrid; e.target.classList.toggle("on",state.showGrid); draw(); };
 document.getElementById("rangeAlpha").oninput = e=>{ state.rangeAlpha = +e.target.value/100; draw(); };
+document.getElementById("autoApply").onchange = e=>{
+  state.autoApply = e.target.checked;
+  setHint(state.autoApply ? "改参数会直接套用到选中的建筑" : "改参数只改「待放置」的配置，不动选中的建筑");
+};
 document.getElementById("zoom").oninput = e=>{ state.zoom = +e.target.value/100; fitCanvas(); draw(); };
 ["alX","alY","alS"].forEach(id=>document.getElementById(id).oninput = e=>{
   const v = +e.target.value;
@@ -1666,6 +3023,61 @@ document.getElementById("btnClear").onclick = ()=>{
   state.selBuilding=null;
   save(); draw(); renderStats(); renderSpecs(); checkPath();
 };
+document.getElementById("btnResetAll").onclick = ()=>{
+  if(!confirm("把「"+cur().name+"」全部重置回初始状态？\n会清空建筑、地形修改和底图对齐，且无法恢复。")) return;
+  delete state.data.maps[cur().name];
+  state.selBuilding = null;
+  state.align = {x:0,y:0,s:100};
+  document.getElementById("alX").value=0;
+  document.getElementById("alY").value=0;
+  document.getElementById("alS").value=100;
+  undoStack.length = 0;
+  lastWave = null;
+  save(); loadBaseImage(); fitCanvas(); draw();
+  renderStats(); renderSpecs(); renderNotes(); renderLegend(); renderWolfPanel(); renderWave(); checkPath();
+  renderSim(null);
+  setHint("已全部重置为初始状态");
+};
+/* 随机 Boss：按本图 random_boss 的累计概率抽一个 */
+document.getElementById("btnBoss").onclick = ()=>{
+  const m = cur(), cfg = m.wolf;
+  const list = (cfg && cfg.randomBoss) || [];
+  if(!list.length){ setHint("这张图没有随机 Boss 配置"); return; }
+  const r = Math.random();
+  let pick = list[list.length-1];
+  for(const e of list){ if(r < e[0]){ pick = e; break; } }
+  const id = pick[1], mul = parseFloat(pick[2]) || 1;
+  const L = simLevel(), diff = simDiff();
+  const hp = Math.floor(wolfHp(id, L, diff) * mul);
+  const info = D.wolfs[id] || {};
+  const drop = (pick[3] && pick[3].properties && pick[3].properties.card) || null;
+  const dropTxt = drop ? Object.keys(drop).map(k=>k+"×"+drop[k]).join("、") : "";
+  document.getElementById("bossResult").innerHTML =
+    '<div class="kv"><span>随机 Boss</span><b>'+wolfName(id)+'</b></div>'+
+    '<div class="kv"><span>血量</span><b>'+fmt(hp)+'</b></div>'+
+    '<div class="kv"><span>速度 / pop</span><span>'+(info.speed||"-")+' / '+(info.pop||"-")+
+      (info.fly ? ' · 会飞' : '')+'</span></div>'+
+    '<div class="kv"><span>难度倍率</span><span>×'+mul+'（波难度 '+(D.waveDiff[diff.toFixed(1)]||"")+'）</span></div>'+
+    (dropTxt ? '<div class="note">掉落：'+dropTxt+'</div>' : '');
+  lastBoss = { id, hp, mul };
+  // 随机 Boss 也放进这一波里，模拟走狼时会跟着一起出
+  if(!lastWave) lastWave = generateWave();
+  if(lastWave){
+    if(lastWave.bossEntry){
+      const k = lastWave.list.indexOf(lastWave.bossEntry);
+      if(k >= 0) lastWave.list.splice(k, 1);
+    }
+    const entry = { id, hp, boss:true };
+    // Boss 在出狼队列里的位置是随机的：最前、最后、中间都可能
+    const at = Math.floor(Math.random() * (lastWave.list.length + 1));
+    lastWave.list.splice(at, 0, entry);
+    lastWave.bossEntry = entry;
+    lastWave.bossIndex = at;
+    lastWave.total = lastWave.list.length;
+    renderWave();
+    setHint("随机 Boss "+wolfName(id)+" 已加入这一波（第 "+(at+1)+" 只出），点「模拟走狼」会一起算");
+  }
+};
 document.getElementById("btnSeedMake").onclick = ()=>{
   const n = layoutOf().length;
   if(!n){ document.getElementById("seedHint").textContent = "本图还没有布阵，先放几座塔。"; return; }
@@ -1684,6 +3096,219 @@ document.getElementById("btnSeedLoad").onclick = ()=>{
   const msg = loadSeed(document.getElementById("seedBox").value);
   document.getElementById("seedHint").textContent = msg;
 };
+/* ---- 检查 / 更新到最新版 ----
+   更新地址内置在代码里，界面上没有任何地方能改。
+   为了防备“别人二次分享前把地址改掉”，这里做了三层保护：
+     1) 地址不是明文，是打包（base64）后存放的，运行时才解开；
+     2) 解开后要和内置指纹（UPD_FP）比对，对不上就说明代码被人动过，直接停止联网更新；
+     3) 地址还必须落在站点白名单（UPDATE_ALLOW）里，别的域名一律不联网、不跳转。
+   仓库首页（给人看的）：https://github.com/AC-ake/tdsheepvillage-lineup
+   工具自己取文件的地址依次尝试，先成功用哪个就用哪个：
+     1) raw 的 main 分支（公开仓库直接可用，不需要开 Pages）
+     2) GitHub Pages（以后在仓库设置里开了 Pages 就用这个）
+     3) raw 的 master 分支（万一仓库默认分支改成 master） */
+const UPD_PACK = "WyJodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vQUMtYWtlL3Rkc2hlZXB2aWxsYWdlLWxpbmV1cC9tYWluLyIsImh0dHBzOi8vYWMtYWtlLmdpdGh1Yi5pby90ZHNoZWVwdmlsbGFnZS1saW5ldXAvIiwiaHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL0FDLWFrZS90ZHNoZWVwdmlsbGFnZS1saW5ldXAvbWFzdGVyLyJd";
+const UPD_FP   = "c8ed7603e88670c1";
+const UPD_PAGE_URL = "https://github.com/AC-ake/tdsheepvillage-lineup";
+const UPDATE_ALLOW = [
+  "https://raw.githubusercontent.com/AC-ake/tdsheepvillage-lineup/",
+  "https://ac-ake.github.io/tdsheepvillage-lineup/",
+];
+function updUnpack(pack){
+  try{
+    const arr = JSON.parse(decodeURIComponent(escape(atob(pack))));
+    return (Array.isArray(arr) && arr.length && arr.every(x=>typeof x === "string")) ? arr : null;
+  }catch(e){ return null; }
+}
+function updHash(list){
+  const s = list.join("\n");
+  let h1 = 2166136261 >>> 0, h2 = 5381 >>> 0;
+  for(let i=0;i<s.length;i++){
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+    h2 = ((h2 * 33) ^ c) >>> 0;
+  }
+  return h1.toString(16).padStart(8,"0") + h2.toString(16).padStart(8,"0");
+}
+function updTrusted(base){
+  return typeof base === "string" && base.indexOf("https://") === 0 &&
+         !/[?#@\\]/.test(base) &&
+         UPDATE_ALLOW.some(p => base.indexOf(p) === 0);
+}
+const UPDATE_BASES_ALL = updUnpack(UPD_PACK);
+const UPDATE_OK = !!(UPDATE_BASES_ALL && updHash(UPDATE_BASES_ALL) === UPD_FP);
+const UPDATE_BASES = UPDATE_OK ? UPDATE_BASES_ALL.filter(updTrusted) : [];
+const UPD_READY = UPDATE_OK && UPDATE_BASES.length > 0 && UPDATE_BASES.length === UPDATE_BASES_ALL.length;
+let updGoodBase = "";
+function updBase(){ return updGoodBase || (UPD_READY ? UPDATE_BASES[0] : ""); }
+const newerVersion = window.YC_NEWER;      // 版本号比较（在页面最上面定义，启动时也要用）
+function updInfo(html){ document.getElementById("updInfo").innerHTML = html; }
+async function updCheck(manual){
+  if(!UPD_READY){
+    updInfo('<span class="warn">更新地址校验失败（这个文件被人改动过），已停止自动更新，也不会跳转到任何网址。'+
+            '请到 github.com/AC-ake/tdsheepvillage-lineup 重新下载一份原版工具。</span>');
+    document.getElementById("updOpen").style.display = "none";
+    document.getElementById("updFiles").style.display = "none";
+    return;
+  }
+  const bases = updGoodBase ? [updGoodBase].concat(UPDATE_BASES.filter(b=>b!==updGoodBase)) : UPDATE_BASES;
+  updInfo("正在检查更新…");
+  let lastErr = "";
+  for(const base of bases){
+    if(!updTrusted(base)) continue;
+    try{
+      const r = await fetch(base + "version.json", {cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      updGoodBase = base;
+      if(newerVersion(j.version, window.YC_LOCAL_VERSION)){
+        updInfo('发现新版本 <b>'+j.version+'</b>（当前 '+window.YC_LOCAL_VERSION+'）'+(j.note ? '<br>'+j.note : "")+
+                '<br>点「下载新版文件」保存 index.html 与 data.js，覆盖到工具文件夹里即可；'+
+                '或点「打开下载页」从 GitHub 重新下载整个工具。');
+        document.getElementById("updOpen").style.display = "inline-block";
+        document.getElementById("updFiles").style.display = "inline-block";
+        document.getElementById("updFiles").dataset.base = base;
+        setHint("有新版本 " + j.version + "，可在右侧「更新」里下载");
+      }else{
+        updInfo("已是最新版本（"+window.YC_LOCAL_VERSION+"）");
+        document.getElementById("updOpen").style.display = "none";
+        document.getElementById("updFiles").style.display = "none";
+      }
+      return;
+    }catch(e){
+      lastErr = e.message;
+    }
+  }
+  updInfo('<span class="warn">检查更新失败：'+lastErr+'（没联网、或仓库那边还没上传时属正常，工具本身照常能用）</span>');
+}
+document.getElementById("updCheck").onclick = ()=>updCheck(true);
+/* 打开 GitHub 下载页（仓库首页） */
+document.getElementById("updOpen").onclick = ()=>{
+  if(!UPD_READY){ updInfo('<span class="warn">更新地址校验失败，已停止跳转。</span>'); return; }
+  window.open(UPD_PAGE_URL, "_blank");
+};
+/* 直接从内置地址把新版的 index.html / data.js 存到本地，覆盖到工具文件夹即可 */
+document.getElementById("updFiles").onclick = async ()=>{
+  const base = document.getElementById("updFiles").dataset.base || updBase();
+  if(!updTrusted(base)){ updInfo('<span class="warn">更新地址校验失败，已停止下载。</span>'); return; }
+  updInfo("正在下载新版文件…");
+  const one = async (name)=>{
+    const r = await fetch(base + name, {cache:"no-store"});
+    if(!r.ok) throw new Error(name + " HTTP " + r.status);
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 10000);
+    await new Promise(r2=>setTimeout(r2, 600));
+  };
+  try{
+    await one("index.html");
+    await one("data.js");
+    updInfo('已下载 index.html 与 data.js（在浏览器「下载」里）。'+
+            '把它们覆盖到工具文件夹里，就升级到新版了；也可以直接点「打开下载页」重新下整个工具。');
+  }catch(e){
+    updInfo('<span class="warn">下载失败：'+e.message+'，可以点「打开下载页」手动下载。</span>');
+  }
+};
+/* ---- 自定义地图 ---- */
+document.getElementById("cusNew").onclick = ()=>{
+  const name0 = (document.getElementById("cusName").value || "").trim();
+  const name = (name0 || ("自定义地图 " + (customDefs().length + 1))).slice(0, 12);
+  if(customDefs().some(d=>d.name===name) || D.maps.some(x=>x.name===name)){
+    alert("已经有叫「"+name+"」的地图了，换个名字吧。"); return;
+  }
+  customDefs().push({ name, cols:12, rows:10, labels:{}, scoreMax:100, wolves:[] });
+  customMapRecord(name);
+  ensureCustomMaps();
+  selectMap(D.maps.findIndex(x=>x.name===name));
+  setHint("已新建自定义地图「"+name+"」");
+};
+document.getElementById("cusRename").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  const name = (document.getElementById("cusName").value || "").trim().slice(0, 12);
+  if(!name || name === m.name) return;
+  if(customDefs().some(d=>d.name===name) || D.maps.some(x=>!x.custom && x.name===name)){
+    alert("已经有叫「"+name+"」的地图了，换个名字吧。"); return;
+  }
+  const def = customDef(m);
+  if(def) def.name = name;
+  // 把地形 / 建筑 / 底图对齐一起搬到新名字下
+  state.data.maps[name] = state.data.maps[m.name] || {layout:[], terrain:{}, align:{x:0,y:0,s:100}};
+  delete state.data.maps[m.name];
+  ensureCustomMaps();
+  selectMap(D.maps.findIndex(x=>x.name===name));
+  setHint("已改名为「"+name+"」");
+};
+document.getElementById("cusApply").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  const cols = Math.max(4, Math.min(30, +document.getElementById("cusCols").value || 12));
+  const rows = Math.max(4, Math.min(30, +document.getElementById("cusRows").value || 10));
+  if(!confirm("改成 "+cols+"×"+rows+" 会清空这张自定义地图上已画的格子和建筑，继续？")) return;
+  const r = rec(m);
+  const def = customDef(m);
+  if(def){ def.cols = cols; def.rows = rows; def.labels = {}; }
+  r.terrain = {}; r.layout = [];
+  m.cols = cols; m.rows = rows;
+  m.grid = Array.from({length:rows}, ()=>"1".repeat(cols));
+  m.labels = {}; m.tele = {}; m.pyramid = {};
+  state.selBuilding = null; undoStack.length = 0; lastWave = null;
+  save(); fitCanvas(); draw(); renderStats(); renderSpecs(); renderNotes(); renderLegend();
+  renderWolfPanel(); renderWave(); checkPath(); renderCustom(); renderSim(null);
+};
+document.getElementById("cusFill").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  rec(m).terrain = {};           // 全部回到「可通行 / 可建塔」
+  save(); draw(); renderStats(); checkPath();
+};
+document.getElementById("cusAuto").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  const r = rec(m);
+  const inKey = "0_0", vilKey = (m.rows-1)+"_"+(m.cols-1);
+  r.terrain[inKey] = 2;                       // 左上角出狼口
+  r.terrain[vilKey] = 3;                      // 右下角羊村入口
+  m.labels[inKey] = "入口↓";                 // 箭头：往下出狼（前方是 (1,0)）
+  m.labels[vilKey] = "→羊村";                // 箭头：往右进村（前一格是 (最后一行, 倒数第二列)）
+  const def0 = customDef(m);
+  if(def0){ def0.labels = Object.assign({}, m.labels); def0.cols = m.cols; def0.rows = m.rows; }
+  ensureCustomMaps();
+  selectMap(D.maps.indexOf(m));
+  save(); draw(); renderStats(); checkPath(); renderLegend();
+  setHint("已在左上放 出狼口（↓）、右下放 羊村入口（→）");
+};
+document.getElementById("cwAdd").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  const id = document.getElementById("cwSelect").value;
+  const hp = Math.max(1, +document.getElementById("cwHp").value || 1000);
+  const n = Math.max(1, Math.min(50, +document.getElementById("cwN").value || 1));
+  const def = customDef(m);
+  if(!def) return;
+  def.wolves.push({ id, hp, n });
+  save(); renderCustom(); renderWolfPanel(); lastWave = null; renderWave(); renderSim(null);
+};
+document.getElementById("cwClear").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  const def = customDef(m);
+  if(!def) return;
+  def.wolves = [];
+  save(); renderCustom(); renderWolfPanel(); lastWave = null; renderWave(); renderSim(null);
+};
+document.getElementById("cwScoreApply").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  const v = Math.max(1, +document.getElementById("cwScore").value || 100);
+  const def = customDef(m);
+  if(def) def.scoreMax = v;
+  m.wolf.scoreMax = v;
+  save(); renderWolfPanel(); renderCustom();
+};
 document.getElementById("simScore").oninput = ()=>{ renderWolfPanel(); lastWave=null; renderWave(); };
 document.getElementById("simDiff").onchange = ()=>{ renderWolfPanel(); lastWave=null; renderWave(); };
 document.getElementById("btnWave").onclick = ()=>{
@@ -1693,22 +3318,21 @@ document.getElementById("btnWave").onclick = ()=>{
   if(!lastWave) setHint("这张图没有出狼配置");
 };
 document.getElementById("btnSim").onclick = ()=>{
+  if(playback){ stopPlayback(); return; }
+  if(!lastWave){                      // 还没抽波：先抽一波，模拟用的就是这一波
+    lastWave = generateWave();
+    renderWave();
+    if(!lastWave){ setHint("这张图没有出狼配置"); return; }
+  }
   const btn = document.getElementById("btnSim");
-  btn.textContent = "模拟中…";
-  setHint("正在模拟走狼…");
+  btn.textContent = "计算中…";
+  setHint("正在计算这一波…");
   setTimeout(()=>{
     let res;
     try{ res = simulateWalk(); }catch(e){ res = {err:"模拟出错："+e.message}; }
-    renderSim(res);
-    if(res && !res.err) setHint(res.leaked ? ("有 "+res.leaked+" 只狼进村") : "这波全部拦下");
-    btn.textContent = "模拟走狼";
+    if(res && !res.err){ playSim(res); }
+    else { renderSim(res); btn.textContent = "模拟走狼"; }
   }, 30);
-};
-document.getElementById("btnWaveCopy").onclick = async ()=>{
-  if(!lastWave){ setHint("先点「随机生成一波」"); return; }
-  const text = lastWave.list.map(t=>t.id).join(",");
-  try{ await navigator.clipboard.writeText(text); setHint("已复制这一波的狼（"+lastWave.total+" 只）"); }
-  catch(e){ setHint("复制失败，可手动选中：" + text.slice(0,60)); }
 };
 document.getElementById("btnHelp").onclick = ()=>{
   alert(
@@ -1716,7 +3340,10 @@ document.getElementById("btnHelp").onclick = ()=>{
     "1. 选地图：左上角按「第一大图 ~ 第四大图」+「大本营防线」分组，共 47 张图。\n"+
     "2. 选塔 → 选宝石（无 / 红绿黄紫蓝黑 × 碎片晶体宝石精华强化）→ 拉等级，然后点画布格子放置。\n"+
     "3. 右侧实时显示本图总造价、参考收入、升级经验，并检查狼路。\n"+
-    "4. 打开「最短路线」可以看到每个出狼口到羊村口的最短路线。\n"+
+    "4. 打开「走狼路线」可以看到每个出狼口到羊村口的最短路线；「飞行路线」（蓝色虚线）\n"+
+    "   是飞行狼走的路线：飞行高度 1100，地图外围的高山飞不过去，地图内部的矮障碍直接飞过；\n"+
+    "   特殊塔位（垫高的平台）上再建高塔会超过 1100，飞行狼只能绕开。每次模拟会在等长的\n"+
+    "   几条路里随机挑一条，所以动画里的飞行路线会和参考线略有不同。照样按箭头方向进村。\n"+
     "5. 打开「攻击范围」可以看到每座塔的射程（颜色=所镶宝石颜色，虚线=被织女雕像加成后的射程）。\n"+
     "6. 右侧「模拟出狼」可以按本图的狼、进度、波难度随机抽一波，并算出每只狼的血量。\n"+
     "7. 布好后点「生成种子码」，把代码发给别人；别人粘贴后点「载入种子码」就能看到同样的布阵。\n\n"+
@@ -1732,10 +3359,14 @@ document.getElementById("btnHelp").onclick = ()=>{
     "· 只有大本营防线用「防线塔造价、经验」那套价（哨塔 300 起），其它图都是普通价（哨塔 100 起）。\n"+
     "· 塔身上会显示等级和宝石档位缩写（如「强化」），鼠标划过能看到完整信息。\n"+
     "· 按住 Ctrl + 左键拖动可以连续造同样配置的塔，松开左键停止（整批只算一步撤销）。\n"+
-    "· 「模拟走狼」按塔的攻击力 / 攻速 / 射程跑一遍战斗，算出这波能不能守住、\n"+
-    "  有没有狼进村、进村还剩多少血。飞行狼只能被哨塔、镶嵌塔、散弹塔打中\n"+
-    "  （炮塔、波动塔打不到；散弹塔打飞行狼伤害与效果翻倍）。\n"+
-    "  简化模型：不含抗性、护盾、召唤、隐身、传送带与技能打断。\n\n"+
+    "· 点地图上已有的建筑 = 选中它，并把它的塔种 / 宝石 / 等级同步到左边；之后在左边改参数，\n"+
+    "  会直接套用到这座建筑上（连着调好几座很省事）。按住 Shift 点建筑 = 用当前配置覆盖它。\n"+
+    "· 「模拟走狼」按塔的攻击力 / 攻速 / 射程跑一遍战斗，算出这波能不能守住、有没有狼进村、剩多少血。\n"+
+    "  模拟用的是你当前抽到的那一波狼（还没抽波时会自动先抽一波），狼按 1 秒 1 只出。\n\n"+
+    "· 会飞的狼每次会在几条等长的飞行路线里随机挑一条；随机 Boss 会随机插在出狼队列里，\n"+
+    "  动画里它的三角更大并套一圈红色虚线。狼放乌云、召唤这类有前摇的技能时会原地定住。\n"+
+    "· 地图上的特殊地形按名字区分：弹簧 = 红 X、弹簧落点 = ⓧ、钢网桥 = 灰色方格、\n"+
+    "  有洞的钢网桥 = 带圈的灰色方格、爆炸箱 = 红 X、传送带 = 浅黄箭头，左侧图例有对照。\n\n"+
     "其他\n"+
     "· 右键或「擦除」删除建筑；Ctrl+Z 撤销。\n"+
     "· 格子数据来自《保卫羊村百科全书V1.82》的地图工作表。"
@@ -1749,6 +3380,19 @@ document.addEventListener("keydown", ev=>{
 window.addEventListener("resize", ()=>{ fitCanvas(); draw(); });
 
 /* ================= 启动 ================= */
+// 显示开关的初始状态要和按钮高亮一致（飞行路线默认开）
+// 更新：地址内置，打开时自动静默检查一次
+document.getElementById("updSrc").innerHTML =
+  "当前版本 <b>" + window.YC_LOCAL_VERSION + "</b><br>更新地址（内置，不可更改）：<br>" +
+  (UPD_READY ? UPDATE_BASES[0].replace(/\/$/, "")
+             : '<span class="warn">校验失败，已停止自动更新</span>');
+setTimeout(()=>updCheck(false), 1200);
+document.getElementById("tgBase").classList.toggle("on", state.showBase);
+document.getElementById("tgPath").classList.toggle("on", state.showPath);
+document.getElementById("tgFly").classList.toggle("on", state.showFly);
+document.getElementById("tgRange").classList.toggle("on", state.showRange);
+document.getElementById("tgGrid").classList.toggle("on", state.showGrid);
+ensureCustomMaps();
 renderChapters();
 renderTowers();
 renderGems();
