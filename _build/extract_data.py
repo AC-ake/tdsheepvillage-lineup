@@ -597,7 +597,9 @@ def read_gem_effects(wb):
        蓝宝石 = 冰霜减速（%），绿宝石 = 毒性伤害（每秒伤害 / 攻击力倍率 + 持续），
        红宝石 = 燃烧（每秒叠加伤害）。"""
     ws = wb["宝石功能"]
-    cols = {"哨塔": 3, "散弹塔": 4, "炮塔": 6, "波动塔": 7}
+    # 镶嵌塔那一列（E）也要读：绿镶嵌是「攻击力 ×1~1.8 倍」的毒（持续 12 秒），
+    # 红镶嵌是「每升 1 级 +2~+10」的燃烧，这两项以前漏掉了，会让塔整体偏弱。
+    cols = {"哨塔": 3, "散弹塔": 4, "镶嵌塔": 5, "炮塔": 6, "波动塔": 7}
     groups = {"黑宝石": 3, "红宝石": 10, "绿宝石": 18, "蓝宝石": 26, "紫宝石": 34, "黄宝石": 41}
     tiers = [("碎片", 1), ("晶体", 2), ("宝石", 3), ("精华", 4), ("强化", 5)]
     out = {"slow": {}, "poison": {}, "burn": {}, "slowXq": {}}
@@ -652,6 +654,12 @@ def read_gem_effects(wb):
                     v = find(t, r"每秒(\d+)点叠加燃烧伤害")
                     if v is not None:
                         out["burn"].setdefault(tower, {})[tier] = v
+                elif gem == "红宝石" and tower == "镶嵌塔":
+                    # 表里写的是「每秒 A 点~B 点」，对应 1~60 级：A 是 1 级，B 是 60 级
+                    m = re.search(r"每秒(\d+)点~(\d+)点叠加燃烧伤害", t)
+                    if m:
+                        a, b = float(m.group(1)), float(m.group(2))
+                        out["burn"].setdefault(tower, {})[tier] = {"base": a, "step": (b - a) / 59.0}
 
     # 镶嵌塔的冰霜减速：表里按等级给出（1~30 在 J~N，31~60 在 P~T）
     # 黄宝石的暴击（哨塔/散弹塔）与眩晕（炮塔/波动塔）
@@ -926,6 +934,31 @@ def read_wolves():
         for e in rnd:
             used.add(e[1])
 
+    # 转生 / 变身 / 召唤 生成的狼也要有数据（否则这些技能在工具里就等于没生效）
+    ms = (cfg.get("skill") or {}).get("monsterSkill") or {}
+    changed = True
+    while changed:
+        changed = False
+        for wid in list(used):
+            w = cfg["wolfs"].get(wid) or {}
+            for s in (w.get("skills") or []):
+                info = ms.get(s.get("skid")) or {}
+                kind = info.get("kindId")
+                lv = info.get("levels") or []
+                i = min(max(0, int(s.get("lev", 1)) - 1), len(lv) - 1) if lv else -1
+                if i < 0:
+                    continue
+                p = lv[i]
+                targets = []
+                if kind == "reborn" and p and isinstance(p[0], list):
+                    targets = [x for x in p[0] if isinstance(x, str)]
+                elif kind in ("morph", "summon") and len(p) > 5 and isinstance(p[5], str):
+                    targets = [p[5]]
+                for t in targets:
+                    if t in cfg["wolfs"] and t not in used:
+                        used.add(t)
+                        changed = True
+
     wolfs = {}
     for wid in sorted(used):
         w = cfg["wolfs"].get(wid)
@@ -942,6 +975,9 @@ def read_wolves():
             "w": w.get("width"), "h": w.get("height"),
             # 带 Fly_* 技能的狼会飞：炮塔、波动塔打不到；散弹塔打它伤害与效果翻倍
             "fly": any(str(s.get("skid", "")).startswith("Fly") for s in (w.get("skills") or [])),
+            # 寻路吸引力 charm：游戏里狼找到一条路后会把这条路对后来狼的开销改掉
+            # （多数狼是负值＝排斥，所以后来的狼会走另一条通道，这就是「两条通道都会走」的原因）
+            "charm": w.get("charm", 0),
         }
     wave_diff = {k: nm(v.get("desc")) for k, v in (cfg.get("wolf_hard_ness") or {}).items()}
     return map_wolf, wolfs, wave_diff
