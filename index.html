@@ -184,7 +184,7 @@
     <div class="note" id="mapBrief" style="margin-top:5px"></div>
 
     <div id="customBox" style="display:none">
-      </div></div><div class="section-card"><div class="section-title">自定义地图</div><div class="section-body">
+      </div></div><div class="section-card" id="customCard"><div class="section-title">自定义地图</div><div class="section-body">
       <div class="slider">
         <span class="note" style="width:34px">列</span>
         <input type="number" id="cusCols" min="4" max="30" value="12" style="width:66px">
@@ -207,6 +207,7 @@
       <div class="row" style="margin-top:4px">
         <button class="chip" id="cusNew">新建一张自定义地图</button>
         <button class="chip" id="cusRename">改名</button>
+        <button class="chip" id="cusDel">删除这张自定义地图</button>
       </div>
     </div>
 
@@ -264,6 +265,12 @@
       <span class="note">范围透明度</span>
       <input type="range" id="rangeAlpha" min="2" max="60" value="16">
     </div>
+    <div class="slider" style="margin-top:6px">
+      <span class="note">本图塔攻速倍率</span>
+      <input type="range" id="rateMul" min="0.1" max="2" step="0.05" value="2">
+      <input type="number" id="rateMulNum" min="0.1" max="2" step="0.05" value="2" style="width:66px">
+    </div>
+    <div class="note">只影响「模拟走狼」里塔的出手速度（1 = 完全按面板数值，最大 2、最小 0.1）。</div>
     <div class="slider" style="margin-top:4px">
       <span class="note">画布缩放</span>
       <input type="range" id="zoom" min="60" max="260" value="100">
@@ -303,7 +310,7 @@
     <div class="section-card"><div class="section-title">造价统计</div><div class="section-body">
     <div class="info">
       <div class="kv"><span>本图总造价</span><span class="total" id="sumTotal">0</span></div>
-      <div class="kv" id="incomeRow"><span>参考收入（图册标注）</span><b id="sumIncome">—</b></div>
+      <div class="kv" id="incomeRow"><span>参考收入</span><b id="sumIncome">—</b></div>
       <div id="sumRows" style="margin-top:6px"></div>
       <div class="kv" id="expRow" style="margin-top:6px"><span>升级经验合计</span><b id="sumExp">0</b></div>
       <div class="note" style="margin-top:6px">数据来源：羊村百科</div>
@@ -340,7 +347,8 @@
       <div class="kv" style="margin-top:6px"><span>狼等级 L</span><b id="simLevel">—</b></div>
       <div class="kv"><span>本图狼血量</span><span id="simHpList" class="note"></span></div>
       <div class="row" style="margin-top:6px">
-        <button class="chip" id="btnBoss">生成随机boss</button>
+      <button class="chip" id="btnBoss">生成随机boss</button>
+      <button class="chip" id="btnFinal">生成关底Boss波</button>
         <button class="chip" id="btnWave">随机生成一波</button>
         <button class="chip" id="btnSim">模拟走狼</button>
         <select id="simSpeed" title="动画倍速">
@@ -394,7 +402,7 @@
 <script>
 /* ---------------- 版本 / 自动更新 ----------------
    发布新版本时：把这里的版本号 + 同目录的 version.json 一起改成新版本号再上传即可。 */
-window.YC_LOCAL_VERSION = "1.5";
+window.YC_LOCAL_VERSION = "1.5.4";
 /* 版本号比较：1.10 > 1.9 */
 window.YC_NEWER = function(a, b){
   var pa = String(a).split("."), pb = String(b).split(".");
@@ -507,6 +515,18 @@ function cellType(m,r,c){
   const ov = rec(m).terrain[r+"_"+c];
   if(ov !== undefined) return ov;
   return +m.grid[r][c];
+}
+/* 特殊地形符号：地图自带的 + 用户在「改地形」里手动放的（自定义地图可以摆别张图出现过的障碍） */
+function featMap(m){
+  m = m || cur();
+  const ov = (rec(m).feat) || {};
+  const out = Object.assign({}, m.feat || {});
+  for(const k in ov){ if(ov[k]) out[k] = ov[k]; else delete out[k]; }
+  return out;
+}
+function featAt(m,r,c){
+  m = m || cur();
+  return featMap(m)[r+"_"+c] || "";
 }
 function buildingAt(r,c){
   return rec().layout.find(b=>b.r===r&&b.c===c) || null;
@@ -626,7 +646,7 @@ function cellCenter(r,c){ return [PAD + (c+.5)*CELL, PAD + (r+.5)*CELL]; }
 const FEATURE_STYLE = {
   "弹簧":        {sym:"X",  color:"#b3261e", kind:"x"},
   "\u203b":      {sym:"\u24e7", color:"#b3261e", kind:"circle-x"},   // ※ = 弹簧落点
-  "爆炸箱":      {sym:"X",  color:"#c62828", kind:"x"},
+  "爆炸箱":      {sym:"X",  color:"#e6e6e6", kind:"x", tile:"#5a3a22"},   // 深棕底 + 银色 X
   "传送带":      {sym:"\u25b6", color:"#b58900", kind:"belt"},
   "钢网桥":      {sym:"\u25a2", color:"#7b8794", kind:"grid"},
   "有洞的钢网桥":{sym:"\u25ef", color:"#7b8794", kind:"hole"},
@@ -730,7 +750,11 @@ function drawFeatureMark(r, c, name, mark, dir){
     ctx.fillRect(PAD + c*CELL + 2, PAD + r*CELL + 2, CELL-4, CELL-4);
     ctx.strokeStyle = "#2f383e"; ctx.lineWidth = Math.max(1.2, CELL*0.06);
     ctx.beginPath(); ctx.arc(cx, cy, s*0.62, 0, Math.PI*2); ctx.stroke();
-  }else if(st.kind === "x"){                     // 弹簧 / 爆炸箱：一个 X
+  }else if(st.kind === "x"){                     // 弹簧 = 红 X；爆炸箱 = 深棕底 + 银色 X
+    if(st.tile){
+      ctx.fillStyle = st.tile + "ee";
+      ctx.fillRect(PAD + c*CELL + 1.5, PAD + r*CELL + 1.5, CELL-3, CELL-3);
+    }
     ctx.strokeStyle = st.color; ctx.lineWidth = Math.max(2, CELL*0.11);
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -782,10 +806,15 @@ function draw(){
   ctx.globalAlpha = 1;
 
   // 特殊地形符号（弹簧、弹簧落点、钢网桥、有洞的钢网桥、爆炸箱、传送带……）
-  for(const key in (m.feat||{})){
+  const fm = featMap(m);
+  const pbFrame = (typeof playback !== "undefined" && playback) ? playback.frame : null;
+  for(const key in fm){
     const [r,c] = key.split("_").map(Number);
     if(r>=m.rows || c>=m.cols) continue;
-    drawFeatureMark(r, c, m.feat[key], null, (m.belt||{})[key]);
+    // 播放动画时：已经被推炸掉的爆炸箱不再画
+    if(pbFrame && fm[key] === "爆炸箱" && pbFrame.gone &&
+       pbFrame.gone.some(g=>g[0]===r && g[1]===c)) continue;
+    drawFeatureMark(r, c, fm[key], null, (m.belt||{})[key]);
   }
   for(const key in (m.marks||{})){
     const [r,c] = key.split("_").map(Number);
@@ -926,8 +955,8 @@ function draw(){
   }
   if(state.showFly && mapHasFlyer(m)){
     const fa = flyAlternates(m);
-    ctx.save(); ctx.globalAlpha = 0.3;                  // 备选路线（另外一两种拐法）淡一点
-    fa.alts.forEach(list=>list.slice(1, 2).forEach(p=>drawRoutes([{path:p}], state.colorFly, true)));
+    ctx.save(); ctx.globalAlpha = 0.3;                  // 备选路线（另外几种拐法）淡一点
+    fa.alts.forEach(list=>list.slice(1, 3).forEach(p=>drawRoutes([{path:p}], state.colorFly, true)));
     ctx.restore();
     fa.alts.forEach(list=>drawRoutes([{path:list[0]}], state.colorFly, true));    // 主飞行路线
   }
@@ -938,6 +967,8 @@ function draw(){
     ctx.globalAlpha = 0.4;
     const seen = new Set();
     playback.res.wolves.forEach(w=>{
+      // 播放动画时也要听「走狼路线 / 飞行路线」两个开关
+      if(w.fly ? !state.showFly : !state.showPath) return;
       if(seen.has(w.route)) return;
       seen.add(w.route);
       drawRoutes([{path:w.route}], w.fly ? state.colorFly : state.colorPath, !!w.fly);
@@ -989,6 +1020,33 @@ function draw(){
       ctx.strokeStyle = "#5f666c"; ctx.lineWidth = 2; ctx.stroke();
     });
   }
+  // 被减速粒子影响的塔：叠一层淡蓝色（能看到塔本身，和乌云/自爆的纯灰不同）
+  if(playback && playback.frame && playback.frame.slowed){
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    playback.frame.slowed.forEach(cell=>{
+      const [x,y] = cellCenter(cell[0], cell[1]);
+      ctx.beginPath(); ctx.arc(x, y, CELL*0.42, 0, Math.PI*2);
+      ctx.fillStyle = "#8fd4ff"; ctx.fill();
+      ctx.strokeStyle = "#4aa3d8"; ctx.lineWidth = 2; ctx.stroke();
+    });
+    ctx.restore();
+  }
+  // 爆炸箱被推满 4 次 → 炸点画一圈扩散的爆炸（周围塔随后变灰一段时间）
+  if(playback && playback.blasts && playback.blasts.length){
+    playback.blasts.forEach(cell=>{
+      const key = cell[0] + "_" + cell[1];
+      const t0 = (playback.goneAt && playback.goneAt.get(key) != null) ? playback.goneAt.get(key) : playback.t;
+      const [x,y] = cellCenter(cell[0], cell[1]);
+      paintBlast(x, y, (playback.t - t0) / 0.8);
+    });
+  }
+  // 狼发动「自爆」技能：同一个爆炸动画（自爆狼、狼王都是这个效果）
+  if(playback && playback.frame && playback.frame.booms){
+    playback.frame.booms.forEach(b=>{
+      paintBlast(PAD + (b[1] + 0.5) * CELL, PAD + (b[0] + 0.5) * CELL, b[2] / 0.8);
+    });
+  }
 
   // 跟随光标的「当前选中塔」预览（在光标右上方）
   drawWolves();
@@ -1018,6 +1076,23 @@ function hexA(hex, a){
   const h = (hex||"#888888").replace("#","");
   const n = parseInt(h.length===3 ? h.split("").map(x=>x+x).join("") : h, 16);
   return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+/* 炸点动画：一圈扩散的爆炸。爆炸箱炸开、狼发动「自爆」都用这一个效果。
+   k = 0~1 的播放进度（0.8 秒放完一圈） */
+function paintBlast(x, y, k){
+  k = Math.max(0, Math.min(1, k || 0));
+  const rad = CELL * (0.35 + 1.85*k);
+  ctx.save();
+  const grd = ctx.createRadialGradient(x, y, rad*0.1, x, y, rad);
+  grd.addColorStop(0, "rgba(255,246,190,"+(0.85*(1-k)).toFixed(3)+")");
+  grd.addColorStop(0.5, "rgba(255,152,54,"+(0.6*(1-k)).toFixed(3)+")");
+  grd.addColorStop(1, "rgba(255,59,48,0)");
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 0.9*(1-k);
+  ctx.strokeStyle = "#ffe9a8"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
 }
 /* 波动塔的十字攻击会被障碍和建筑挡住 */
 function blocksWave(m,r,c){
@@ -1057,17 +1132,25 @@ function buildingHeight(b){
 /* 与地图边缘连通的不可通过地形 = 外围高山 */
 function outerImpassable(m){
   const rows = m.rows, cols = m.cols, seen = new Uint8Array(rows*cols), q = [];
+  /* 只有贴着地图边缘的「外围高山」才算高得飞不过去（2 格厚）。
+     地图内部那种细长的不可通过地形（例如生命森林里那道薄墙）虽然和边缘连着，
+     但在游戏里飞狼能从上面飞过去，所以不算高——这样飞行路线才不会舍近取远。 */
+  const BAND = 2;
   const push = (r,c)=>{
     if(r<0||c<0||r>=rows||c>=cols) return;
     const i = r*cols+c;
     if(seen[i] || cellType(m,r,c) !== 0) return;
     seen[i] = 1; q.push([r,c]);
   };
-  for(let c=0;c<cols;c++){ push(0,c); push(rows-1,c); }
-  for(let r=0;r<rows;r++){ push(r,0); push(r,cols-1); }
+  for(let d=0; d<=BAND; d++){
+    for(let c=0;c<cols;c++){ push(d,c); push(rows-1-d,c); }
+    for(let r=0;r<rows;r++){ push(r,d); push(r,cols-1-d); }
+  }
   for(let k=0;k<q.length;k++){
     const [r,c] = q[k];
-    push(r+1,c); push(r-1,c); push(r,c+1); push(r,c-1);
+    if(r<=BAND || c<=BAND || r>=rows-1-BAND || c>=cols-1-BAND){
+      push(r+1,c); push(r-1,c); push(r,c+1); push(r,c-1);
+    }
   }
   return seen;
 }
@@ -1077,10 +1160,11 @@ const AIR_BLOCK_FEATURES = new Set(["核电厂", "反应炉", "火山"]);
 function airMap(m, rand){
   const rows = m.rows, cols = m.cols;
   const outer = outerImpassable(m), blocked = new Uint8Array(rows*cols);
+  const fm = featMap(m);
   for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
     const i = r*cols+c, t = cellType(m,r,c);
     if(t===2 || (t===3 && !isVillageIn(m,r,c)) || pyramidKind(m,r,c)){ blocked[i] = 1; continue; }
-    if(AIR_BLOCK_FEATURES.has((m.feat||{})[r+"_"+c])){ blocked[i] = 1; continue; }
+    if(AIR_BLOCK_FEATURES.has(fm[r+"_"+c])){ blocked[i] = 1; continue; }
     let h = 0;
     if(t===0) h += outer[i] ? TERRAIN_OUTER : TERRAIN_INNER;
     if(t===6) h += PLATFORM_HEIGHT;                 // 特殊塔位是垫高的
@@ -1148,8 +1232,9 @@ function nextStates(m,r,c,ax,withBuildings,out,fly,air,block){
     }
   }else ax = null;
   const t = cellType(m,r,c);
-  // 踩到「传送入」一定会被送走，不能再当普通格子走出去
-  if(t===4){
+  // 踩到「传送入」一定会被送走，不能再当普通格子走出去；
+  // 但「直飞」模式（air.noTele）下飞狼从上面飞过去，不触发传送。
+  if(t===4 && !(fly && air && air.noTele)){
     const gid = (m.tele||{})[r+"_"+c];
     for(let rr=0;rr<m.rows;rr++) for(let cc=0;cc<m.cols;cc++){
       if(cellType(m,rr,cc)!==5) continue;
@@ -1294,10 +1379,10 @@ function bfsFrom(m, sources, withBuildings, fly, air, block){
 }
 /* 每个出狼口都取到最近羊村口的最短路线；
    fly = true 时算飞行狼的路线（按高度模型决定能不能飞过），rand = true 时在等长的几条路里随机挑 */
-function shortestPaths(fly, rand, block){
+function shortestPaths(fly, rand, block, noTele){
   const m = cur(), {entrances, villages} = entryGroups(m);
   if(!entrances.length || !villages.length) return [];
-  const air = fly ? airMap(m, rand) : null;
+  const air = fly ? Object.assign(airMap(m, rand), {noTele: !!noTele}) : null;
   const key = p=>p[0]+","+p[1];
   const out = [];
   entrances.forEach(e=>{
@@ -1368,6 +1453,16 @@ function shortestPaths(fly, rand, block){
     });
   });
   return out;
+}
+/* 飞狼路线：直飞（从传送阵上方飞过、不触发传送）和「走传送阵」各算一条，取更短的那条。
+   游戏里飞狼不一定要走传送阵，也不该出现「舍近取远」的绕路。 */
+function flyRouteList(){
+  const direct = shortestPaths(true, false, null, true);
+  const through = shortestPaths(true, false, null, false);
+  return direct.map(p=>{
+    const q = through.find(t=>leadKey(t.from) === leadKey(p.from) && leadKey(t.to) === leadKey(p.to));
+    return (!q || p.path.length <= q.path.length) ? p : q;
+  });
 }
 /* 同一只出狼口可能有好几条通道（呼噜噜村、虎克工厂这种两条并排的路）。
    做法：先取最短路线，再把这条路中间一段封住重算一次，得到的另一条就是备用通道；
@@ -1503,11 +1598,12 @@ function checkPath(){
             '</div>';
   }
   if(mapHasFlyer(m)){
-    const fly = shortestPaths(true);
+    const fly = flyRouteList();
     if(fly.length){
       const shaped = flyAlternates(m).alts;
       html += '<div class="note" style="margin-top:4px">本图有会飞的狼：飞行路线 '+fly.length+' 条，长度：' +
-              shaped.map(list=>list[0].length).join(" / ")+' 格（按飞行高度 1100 算：地图外围的高山、' +
+              shaped.map(list=>list[0].length).join(" / ")+' 格，每条出狼口有 ' +
+              shaped.map(list=>list.length).join(" / ")+' 种拐法（按飞行高度 1100 算：地图外围的高山、' +
               '特殊塔位上的高塔飞不过去，需要绕路；全程拐弯 2~4 次、不会往回飞）。</div>';
     }
   }
@@ -1795,8 +1891,9 @@ function renderLegend(){
     '<div><i style="background:'+COLORS[type]+'"></i>'+name+'（'+TYPE_NAME[type]+'）</div>');
   // 同类地形里再分细类：每个细类给出画在地图上的那个符号
   const featNames = [];
-  for(const key in (m.feat||{})){
-    const n = m.feat[key];
+  const fm = featMap(m);
+  for(const key in fm){
+    const n = fm[key];
     if(featNames.indexOf(n) < 0) featNames.push(n);
   }
   if(Object.keys(m.marks||{}).length && featNames.indexOf("\u203b") < 0) featNames.push("\u203b");
@@ -1855,7 +1952,7 @@ const BOX_BLAST_RANGE = 2, BOX_BLAST_CLOUD = 2;
 const SPRING_AIR_TIME = 0.5;   // 踩到弹簧但没被弹到落点时，腾空 0.5 秒（这期间算飞狼）
 /* 校准系数：把塔的攻速整体乘一个倍数（1 = 完全按面板/百科数值）。
    用来把模拟结果对齐到游戏实测（尤其是防线的挂机强度）。 */
-let TOWER_RATE_MUL = 2.0;
+let TOWER_RATE_MUL = 1.5;
 /* 紫镶嵌闪电弹射的最远传递距离：游戏代码 BounceAttackSkill.MAX_DISTANCE = 3000（3 格） */
 const CHAIN_MAX_DIST = 3.0;
 const SIM_MAX_T = 240;        // 一次模拟最多跑 4 分钟（够狼走完全程；分身多了也不会算到超时）
@@ -2070,9 +2167,46 @@ function flyArcAll(m, air, seg){
   }
   // 侧移出去再回来的这一段尽量放在前半程：越靠近入村口越容易回到最短路径上
   mids.sort((a,b)=>a-b);
-  for(const sideLen of [FLY_RUN_MIN, FLY_RUN_MIN+1, FLY_RUN_MIN+2])   // 每次转弯至少飞 2~4 格
+  // 每次转弯至少飞 2 格；直走廊上侧移要更长才拐得出来，所以 2~6 格都试一遍
+  for(const sideLen of [2, 3, 4, 5, 6])
     for(const sign of [1, -1])
-      mids.slice(0, 12).forEach(m1=>tryArc(sideLen, sign, m1));
+      mids.slice(0, 24).forEach(m1=>tryArc(sideLen, sign, m1));
+  /* 形状二：先直飞一段再侧移出去回来（起点或终点贴着墙时，形状一拐不出来）——4 次转弯 */
+  const walkLegs = (legs)=>{
+    const cells = [S.slice()];
+    let r = S[0], c = S[1];
+    for(const [dir, len] of legs){
+      const ray = flyRay(m, air, [r,c], dir, len);
+      if(!ray) return null;
+      ray.forEach(p=>cells.push(p));
+      r = cells[cells.length-1][0]; c = cells[cells.length-1][1];
+    }
+    return (r === T[0] && c === T[1]) ? cells : null;
+  };
+  const keep = (cells)=>{
+    if(!cells) return;
+    const sig = cells.map(p=>p.join(",")).join("|");
+    if(!found.has(sig)) found.set(sig, cells);
+  };
+  for(const sideLen of [2, 3, 4, 5])
+    for(const sign of [1, -1]){
+      const sd = [sideDir[0]*sign, sideDir[1]*sign];
+      for(let a=1; a<=mainLen-2; a++)
+        for(let b=1; a+b<mainLen; b++)
+          keep(walkLegs([[mainDir, a], [sd, sideLen], [mainDir, b], [[-sd[0],-sd[1]], sideLen], [mainDir, mainLen-a-b]]));
+    }
+  /* 形状三（游戏里最常见）：第一段只飞 1~2 格就拐 → 侧移 1 格（上中下三宽） →
+     中间一口气飞很长一段（尽量 ≥7 格）→ 侧移回来 → 收尾。 */
+  for(const sideLen of [1, 2])
+    for(const sign of [1, -1]){
+      const sd = [sideDir[0]*sign, sideDir[1]*sign];
+      for(let a=1; a<=2 && a<mainLen; a++)
+        for(let b=mainLen-a-1; b>=1; b--){
+          const c = mainLen - a - b;
+          if(c < 1) continue;
+          keep(walkLegs([[mainDir, a], [sd, sideLen], [mainDir, b], [[-sd[0],-sd[1]], sideLen], [mainDir, c]]));
+        }
+    }
   return Array.from(found.values());
 }
 /* 一段路 → 游戏那样的折线：优先「2~4 次拐弯」；
@@ -2082,12 +2216,23 @@ function flyStairAll(m, air, seg){
   const S = seg[0], T = seg[seg.length-1];
   const needV = Math.abs(T[0]-S[0]), needH = Math.abs(T[1]-S[1]);
   if(needV + needH < 2) return [];
-  const prefs = [[2,3,4], [0,1], [5,6]];
-  const stages = [[FLY_RUN_MIN, 6], [2, 8], [1, 12]];      // 先严格、后越来越宽松（迷宫图用得上）
-  for(const [runCap, maxTurns] of stages){
-    const out = flyPick(flySearch(m, air, seg, runCap, maxTurns), prefs, 4);
-    if(out.length) return out;
+  // 起点与村口在同一排 / 同一列（直线走廊）：先试「拐两次以上」的弧线，别直接给一条直线
+  if(!needH || !needV){
+    const arc0 = flyArcAll(m, air, seg);
+    if(arc0.length) return arc0;
   }
+  const prefs = [[2,3,4], [0,1], [5,6]];
+  /* 先严格、后越来越宽松：一张图至少要凑出 3 条不一样的折线（游戏里飞狼也不会只走一条）。
+     迷宫图 / 窄走廊上「每段至少 2 格」凑不满 3 条时，允许某一段只飞 1 格（笔记允许第一段 1 格）。 */
+  const stages = [[FLY_RUN_MIN, 4], [FLY_RUN_MIN, 6], [FLY_RUN_MIN, 8], [1, 6], [1, 8], [1, 10], [1, 12]];
+  let fallback = null;
+  for(const [runCap, maxTurns] of stages){
+    const out = flyPick(flySearch(m, air, seg, runCap, maxTurns), prefs, 6);
+    if(!out.length) continue;
+    if(out.length >= 3) return out.slice(0, 4);       // 够 3 条就收工
+    if(!fallback) fallback = out;                     // 实在凑不齐先用这条（后面还会再放宽）
+  }
+  if(fallback) return fallback;
   const arc = flyArcAll(m, air, seg);
   if(arc.length) return arc;
   return [];
@@ -2126,7 +2271,17 @@ function flyVariants(m, path, air){
     cells.forEach((p,i)=>{
       if(buildingAt(p[0], p[1])){ all++; if(i < Math.max(2, n/3)) first++; }
     });
-    cells.score = all + first*1.5 - Math.max(0, cells.length - minLen)*3 + Math.random()*0.5;
+    /* 飞狼一般贴着「出狼口→村口」那条直线附近飞：偏离 1 格以内（上中下三宽）优先，
+       偶尔偏 2 格，很少偏更多。 */
+    const A = cells[0], B = cells[cells.length-1];
+    const dr = Math.sign(B[0]-A[0]), dc = Math.sign(B[1]-A[1]);
+    let dev = 0;
+    cells.forEach(p=>{
+      const d = Math.abs((p[0]-A[0])*dc - (p[1]-A[1])*dr) / Math.max(1, Math.abs(dr) + Math.abs(dc));
+      if(d > dev) dev = d;
+    });
+    const devScore = dev <= 1.2 ? 1.6 : (dev <= 2.2 ? 0.4 : -dev);
+    cells.score = all + first*1.5 + devScore - Math.max(0, cells.length - minLen)*3 + Math.random()*0.5;
   });
   list.sort((a,b)=>b.score-a.score);
   return list.slice(0, 4);
@@ -2139,7 +2294,7 @@ function flyAlternates(m){
   const key = m.name + "|" + (R.layout||[]).map(b=>[b.r,b.c,b.tower||b.spec||"",b.gem||"",b.spec||""].join(",")).join(";") +
               "|" + Object.keys(R.terrain||{}).map(k=>k+":"+R.terrain[k]).join(",");
   if(flyAltCache && flyAltCache.key === key) return flyAltCache;
-  const base = shortestPaths(true);
+  const base = flyRouteList();
   const air = airMap(m, false);
   const alts = base.map(p=>flyVariants(m, p.path, air));
   flyAltCache = {key, base, alts};
@@ -2253,9 +2408,10 @@ function simulateWalk(){
   const m = cur();
   const wave = lastWave;
   if(!wave) return {err:"先点「随机生成一波」抽一波狼，再点模拟走狼"};
+  TOWER_RATE_MUL = rateMulOf(m);           // 本图设置的塔攻速倍率
   const routes = shortestPaths(false);
   if(!routes.length) return {err:"当前布阵下狼走不出去（出狼口被堵或路线不通）"};
-  const flyRoutes = shortestPaths(true);            // 会飞的狼的路线（下面再从等长的几条里随机会挑）
+  const flyRoutes = flyRouteList();                 // 会飞的狼的路线（直飞与走传送阵取更短的，再从等长的几条里随机会挑）
   const flyAlts = flyRoutes.length ? flyAlternates(m).alts : [];
   /* 同一只出狼口的通道（呼噜噜村、虎克工厂这种两条并排的路都算上）。
      游戏里的寻路：每只狼找到一条路后，会把这条路
@@ -2264,6 +2420,7 @@ function simulateWalk(){
   const corridors = corridorRoutes(m).list;
   const charmCost = new Map();
   const corridorUsed = new Map();
+  const flyUsed = new Map();          // 飞行折线：这场已经飞过哪几条（保证一张图至少几种路子都用上）
   const setCharm = (cells, charm)=>{
     if(!charm) return;
     cells.forEach(p=>{
@@ -2309,9 +2466,10 @@ function simulateWalk(){
     return slot.paths[slot.paths.length-1];
   };
   /* 爆炸箱：狼撞上去会被弹后退，箱子被朝狼前进方向推一格；同一只狼不重复触发同一格 */
+  const features = featMap(m);
   const boxes = new Map();
-  for(const key in (m.feat||{})){
-    if(m.feat[key] !== "爆炸箱") continue;
+  for(const key in features){
+    if(features[key] !== "爆炸箱") continue;
     const [r,c] = key.split("_").map(Number);
     boxes.set(key, {r, c, n:0});
   }
@@ -2325,9 +2483,9 @@ function simulateWalk(){
   const barriers = [];
   {
     const seen = new Set();
-    const kindAt = (r,c)=>(m.feat||{})[r+"_"+c];
-    for(const key in (m.feat||{})){
-      const kind = m.feat[key];
+    const kindAt = (r,c)=>features[r+"_"+c];
+    for(const key in features){
+      const kind = features[key];
       if(kind !== "火山" && kind !== "反应炉" && kind !== "核电厂") continue;
       if(seen.has(key)) continue;
       const cells = [], q = [key.split("_").map(Number)];
@@ -2374,6 +2532,8 @@ function simulateWalk(){
   const terrain = {hits:0, wolves:0, towers:0, dmg:0};
   let airSprings = 0, rebornFix = 0;
   let boxPushes = 0, boxBlasts = 0;          // 爆炸箱：被撞次数 / 爆炸次数（核对用）
+  const blastLog = [], goneBoxes = [];       // 爆炸特效（动画用）：炸点 + 已经炸掉的箱子
+  const boomLog = [];                        // 狼「自爆」的炸点（动画用，和爆炸箱同一个效果）
   // 机制核对用计数：黄镶嵌范围伤害 / 紫镶嵌连锁 / 波动贯穿 / 溅射中毒 / 诅咒积攒与结算
   let fieldHits = 0, chainHits = 0, pierceHits = 0, poisonSplash = 0, cussHitsCount = 0, cussDmgSum = 0;
   let poisonHits = 0, burnHits = 0;
@@ -2385,7 +2545,7 @@ function simulateWalk(){
      · 每个弹簧有速率（笔记：20，约 5 秒一次）和最大弹起数 5，冷却中走过去的狼只是路过
      · 落点：图册上带 ※ 的格子；已经有建筑的格子不算 */
   const springCells = new Set(), landCells = [];
-  for(const key in (m.feat||{})) if(m.feat[key] === "弹簧") springCells.add(key);
+  for(const key in features) if(features[key] === "弹簧") springCells.add(key);
   for(const key in (m.marks||{})){
     const pos = key.split("_").map(Number);
     if(buildingAt(pos[0], pos[1])) continue;
@@ -2462,8 +2622,28 @@ function simulateWalk(){
       const ri = routeIdx % flyAlts.length;
       rec.routeIdx = ri;
       const pick = flyAlts[ri];
-      // 飞行路线已经是「2~4 次拐弯」的折线，等长的几种拐法里随机挑一条，所以每只会飞的狼路线略有不同
-      rec.route = pick[Math.floor(Math.random()*pick.length)].slice(1);
+      /* 飞行路线同样按 charm 挑：前面的狼（无论走地面还是天上）飞过哪条折线，
+         都会把那条路的开销抬起来，后面的狼就更容易换一条；塔高、塔位在塑形时已经参与过，
+         所以「建塔实时影响飞行寻路」也是生效的。 */
+      const wts = pick.map(p=>{
+        const c = p.length*100 + p.reduce((s,q)=>s + (charmCost.get(q[0]+"_"+q[1]) || 0), 0);
+        return Math.exp(-c / CORRIDOR_TEMP);
+      });
+      // 这场还没飞过的折线先飞一遍（一张图至少几条飞行路线都会被用到），之后才按 charm 挑
+      let usedFly = flyUsed.get(ri);
+      if(!usedFly){ usedFly = new Set(); flyUsed.set(ri, usedFly); }
+      let chosen = pick.find(p=>!usedFly.has(p.join("|")));
+      if(!chosen){
+        let x = Math.random() * wts.reduce((a,b)=>a+b, 0);
+        chosen = pick[pick.length-1];
+        for(let i=0;i<pick.length;i++){ x -= wts[i]; if(x <= 0){ chosen = pick[i]; break; } }
+      }
+      usedFly.add(chosen.join("|"));
+      rec.route = chosen.slice(1);
+      rec.corridor = chosen;
+      rec.corridorKey = chosen.join("|");
+      rec.charm = (D.wolfs[id] || {}).charm || 0;
+      setCharm(chosen, rec.charm);
     }else{
       const slot = corridors.length ? corridors[routeIdx % corridors.length] : null;
       const chosen = slot ? pickCorridor(slot) : routes[routeIdx % routes.length].path;
@@ -2517,6 +2697,8 @@ function simulateWalk(){
     const rv = w.skills.find(a=>a.kind === "revive");
     if(rv && rv.left > 0){
       rv.left--; bump(w, "重生");
+      w.revives = (w.revives || 0) + 1;
+      w.name = baseName(w.name) + "·" + w.revives;      // 僵尸狼·1、僵尸狼·2…
       w.hp = Math.max(1, Math.round(w.hpMax * Math.max(0.05, skillNum(rv.p[1], 0.5))));
       w.silenceT = 0; w.stunT = 0; w.backT = 0; w.cast = null;
       w.burns.length = 0; w.poisonT = 0; w.poison = null;
@@ -2527,9 +2709,17 @@ function simulateWalk(){
       rb.used = true; bump(w, "转生");
       const wasAir = w.fly;
       const dp = wolfPoint(w);                       // 倒地位置（会飞的狼可能是高空 / 障碍上方）
-      (rb.p[0] || []).forEach(id=>{
-        if(!D.wolfs[id] || !canSpawn()) return;
-        const o = mk(id, wolfHp(id, wave.level, wave.diff), t, 0, w);
+      const ids = (rb.p[0] || []).filter(id=>D.wolfs[id]);
+      const one = ids.length === 1;
+      ids.forEach((id, k)=>{
+        if(!canSpawn()) return;
+        // 血量：一对一转生沿用本体的血量上限（「恢复满血」＝回到本体那样的满血），
+        // 一对多（装甲运狼车 → 4 只小突袭狼）按目标狼算，但不超过本体上限，避免出现超血
+        const cap = Math.max(1, Math.round(w.hpMax));
+        const hp = one ? cap : Math.min(Math.max(1, Math.round(wolfHp(id, wave.level, wave.diff))), cap);
+        const o = mk(id, hp, t, 0, w, false, hp);
+        // 名字提示：一对一转生成陆地形态 →「·陆」；一对多 →「·1」「·2」…
+        o.name = baseName(w.name) + (one && wasAir && !o.fly ? "·陆" : "·" + (k + 1));
         // 天空萝莉这类：本体在天上，转生出来的是陆地狼，落点在障碍物 / 建筑之间时，
         // 先按本体移速走回正常的走狼路线再继续（游戏里是对它 jostle）
         if(wasAir && !o.fly && o.route.length > 1) o.fixFrom = dp;
@@ -2543,6 +2733,7 @@ function simulateWalk(){
       bs.used = true; bump(w, "自爆");
       const rad = skillNum(bs.p[0], 2000)/1000, dur = Math.max(1, skillNum(bs.p[1], 5));
       const p = wolfPoint(w);
+      boomLog.push({r:p[0], c:p[1], t: t});
       towers.forEach(T=>{ if(Math.hypot(T.r+0.5-p[0], T.c+0.5-p[1]) <= rad) T.cloudT = Math.max(T.cloudT, t+dur); });
     }
     w.done = true; w.dead = true; killed++;
@@ -2613,8 +2804,14 @@ function simulateWalk(){
       case "morph": {                          // 变身：换成另一种狼，位置不变
         const id = typeof p[5] === "string" ? p[5] : null;
         if(id && D.wolfs[id] && canSpawn()){
-          // 变身成功会回满血，变成下一形态（下一形态自己也可能再变身一次）
-          const nw = mk(id, Math.max(1, wolfHp(id, wave.level, wave.diff)), t, 0, w);
+          // 变身成功会回满血：用本体的血量上限，避免出现比本体还厚的血；
+          // 名字：变过去的狼自己有名字就用它（搬运狼 → 愤怒的搬运狼）；
+          // 如果变来变去还是同一个名字（异变科里尔），才加「·1」「·2」标第几形态
+          w.morphs = (w.morphs || 0) + 1;
+          const nw = mk(id, Math.max(1, Math.round(w.hpMax)), t, 0, w, false, Math.max(1, Math.round(w.hpMax)));
+          const nn = wolfName(id);
+          nw.name = (nn === baseName(w.name)) ? nn + "·" + w.morphs : nn;
+          nw.morphs = w.morphs;
           pending.push(nw);
           releaseCharm(w);
           w.done = true;
@@ -2731,6 +2928,13 @@ function simulateWalk(){
         active++;
         continue;
       }
+      if(w.kb > 0){                                                  // 被爆炸箱顶回去：慢慢后退
+        const step = Math.min(w.kb, 6*TICK);
+        w.kb -= step;
+        w.pos = Math.max(0, w.pos - step);
+        active++;
+        continue;
+      }
       if(w.stunT > 0){ w.stunT -= TICK; active++; continue; }        // 被眩晕：原地不动
       if(w.tauntUntil > t){ active++; continue; }                    // 嘲讽中：停下来顶着
       if(w.cast){ active++; continue; }                              // 施法中：定住不动，直到技能放完
@@ -2770,13 +2974,17 @@ function simulateWalk(){
         const cell = w.route[idx];
         const ck = cell[0] + "_" + cell[1];
         const box = boxes.get(ck);
-        if(box && w.lastBox !== ck){
-          w.lastBox = ck;
+        // 只要「刚踏进这一格」就算撞一次：站在箱子上不会反复触发，
+        // 但同一只狼被顶回去之后再撞、或别的狼来撞，都要算（推满 4 次就炸）
+        if(!box) w.onBox = null;
+        else if(w.onBox !== ck){
+          w.onBox = ck;
+          w.boxT = t;
           const prev = w.route[Math.max(0, idx-1)];
           const dr = Math.sign(cell[0]-prev[0]), dc = Math.sign(cell[1]-prev[1]);
           const tr = box.r + dr, tc = box.c + dc;
-          const t = (tr>=0 && tc>=0 && tr<m.rows && tc<m.cols) ? cellType(m,tr,tc) : 0;
-          if((t===1 || t===7) && !buildingAt(tr,tc) && !boxes.has(tr+"_"+tc)){
+          const tgt = (tr>=0 && tc>=0 && tr<m.rows && tc<m.cols) ? cellType(m,tr,tc) : 0;
+          if((tgt===1 || tgt===7) && !buildingAt(tr,tc) && !boxes.has(tr+"_"+tc)){
             boxes.delete(ck);                      // 箱子往狼走的方向推一格
             box.r = tr; box.c = tc;
             boxes.set(tr+"_"+tc, box);
@@ -2786,6 +2994,8 @@ function simulateWalk(){
           if(box.n >= BOX_PUSH_LIMIT){
             boxes.delete(box.r+"_"+box.c);
             boxBlasts++;
+            blastLog.push({r: box.r, c: box.c, t: t});
+            goneBoxes.push([box.r, box.c]);
             bump(w, "爆炸箱");
             // 爆炸：和狼自爆一样，把周围一圈的塔罩住（乌云，期间不攻击）
             const bp = [box.r+0.5, box.c+0.5];
@@ -2794,7 +3004,9 @@ function simulateWalk(){
                 T.cloudT = Math.max(T.cloudT, t + BOX_BLAST_CLOUD);
             });
           }
-          w.pos = Math.max(0, w.pos - 1);          // 狼被弹后退一格
+          /* 被箱子顶回去：距离按狼自己的速度算（跑得快的退得多），而且是慢慢往后退，不是瞬移。
+             至少退出一格，动画里能看见一小段倒滑，也保证它还会再撞上来。 */
+          w.kb = Math.max(1, (w.speed || 0.5) * 0.5);
         }
       }
       if(springCells.size && !w.fly){
@@ -2839,7 +3051,23 @@ function simulateWalk(){
     if(Math.round(t/TICK) % 2 === 0){
       // 被乌云 / 自爆罩住的塔这一帧要画成纯灰色
       const cloud = towers.filter(T=>T.cloudT > t).map(T=>[T.r, T.c]);
-      record.push({ t: t, cloud: cloud.length ? cloud : null, list: wolves.map((w,wi)=>{
+      // 被减速粒子（被动光环）影响的塔：画一层淡蓝色，但仍能看到塔本身
+      const slowed = towers.filter(T=>{
+        if(T.cloudT > t) return false;
+        return auras.some(w=>{
+          const p = wolfPoint(w);
+          return Math.hypot(T.r+0.5-p[0], T.c+0.5-p[1]) <= w.slowf.r;
+        });
+      }).map(T=>[T.r, T.c]);
+      record.push({ t: t, cloud: cloud.length ? cloud : null,
+        slowed: slowed.length ? slowed : null,
+        blasts: blastLog.filter(b=> t - b.t <= 0.8).map(b=>[b.r, b.c]),
+        booms: boomLog.length ? (function(){
+          const l = boomLog.filter(b=> t - b.t <= 0.8);
+          return l.length ? l.map(b=>[+b.r.toFixed(2), +b.c.toFixed(2), +(t - b.t).toFixed(2)]) : null;
+        })() : null,
+        gone: goneBoxes.slice(),
+        list: wolves.map((w,wi)=>{
         if(w.done) return null;                 // 已经进村 / 被打死的狼不再画
         if(t < w.spawn) return null;            // 还没出狼口的狼不要堆在出口那一格上
         const p = wolfPoint(w);
@@ -3055,6 +3283,7 @@ function simulateWalk(){
     record: record, skillLog: castLog, flyers: wolves.filter(w=>w.fly).length,
     terrain: {hits:terrain.hits, wolves:terrain.wolves, towers:terrain.towers, dmg:Math.round(terrain.dmg)},
     airSprings, rebornFix, belt, boxPushes, boxBlasts,
+    blastLogLen: blastLog.length, goneBoxesLen: goneBoxes.length,
     mech: {fieldHits, chainHits, pierceHits, poisonSplash, poisonApply: poisonHits, burnApply: burnHits,
            cussHits: cussHitsCount, cussDmg: Math.round(cussDmgSum), statue: statueCount},
   };
@@ -3095,6 +3324,17 @@ function playFrame(now){
   while(i + 1 < rec.length && rec[i+1].t <= P.t) i++;
   P.i = i;
   P.frame = rec[i];
+  // 这一帧新炸掉的箱子 → 记下时间，方便在炸点画一会儿爆炸特效
+  if(P.frame && P.frame.gone && P.frame.gone.length){
+    if(!P.goneAt) P.goneAt = new Map();
+    P.frame.gone.forEach(g=>{
+      const k = g[0] + "_" + g[1];
+      if(!P.goneAt.has(k)) P.goneAt.set(k, P.t);
+    });
+  }
+  P.blasts = P.goneAt
+    ? Array.from(P.goneAt.entries()).filter(([k,t0])=> P.t - t0 <= 0.8).map(([k])=>k.split("_").map(Number))
+    : [];
   setHint("走狼动画 "+P.t.toFixed(1)+" 秒 / 共 "+rec[rec.length-1].t.toFixed(1)+" 秒，图上的狼 "+P.frame.list.length+" 只");
   draw();
   if(P.t < rec[rec.length-1].t && playback === P) requestAnimationFrame(playFrame);
@@ -3123,7 +3363,7 @@ function drawWolves(){
     }
     playback.angles[w.k] = ang;
     const s = Math.max(5, CELL * 0.32);
-    const size = w.boss ? s*1.75 : s;          // 随机 Boss 的三角比其它狼大一圈
+    const size = w.boss ? s*1.75 : s;          // Boss 的三角比其它狼大一圈
     ctx.save();
     ctx.globalAlpha = w.hide ? 0.35 : 1;      // 隐身中的狼画成半透明
     ctx.translate(cx, cy);
@@ -3133,11 +3373,14 @@ function drawWolves(){
     ctx.lineTo(-size*0.75, size*0.6);
     ctx.lineTo(-size*0.75, -size*0.6);
     ctx.closePath();
-    ctx.fillStyle = w.fly ? "#8ecbff" : "#ffd24d";
+    // Boss 用红色三角；会飞的（Boss 也能飞）用蓝色描边保留「在天上」的提示
+    ctx.fillStyle = w.boss ? "#ff3b30" : (w.fly ? "#8ecbff" : "#ffd24d");
     ctx.fill();
-    ctx.strokeStyle = "#000000cc"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = (w.boss && w.fly) ? "#8ecbff" : "#000000cc";
+    ctx.lineWidth = (w.boss && w.fly) ? 2 : 1.5;
+    ctx.stroke();
     ctx.restore();
-    if(w.boss){                                // 随机 Boss：外面再套一圈红色虚线
+    if(w.boss){                                // Boss：外面再套一圈红色虚线
       ctx.save();
       ctx.globalAlpha = w.hide ? 0.4 : 1;
       ctx.setLineDash([Math.max(3, CELL*0.16), Math.max(2, CELL*0.12)]);
@@ -3181,7 +3424,8 @@ function renderSim(res){
     ((res.terrain && res.terrain.hits) ?
       '<div class="kv"><span>火山 / 反应炉 / 核电厂爆发</span><b>'+res.terrain.hits+' 次（波及狼 '+
       res.terrain.wolves+' 只、塔 '+res.terrain.towers+' 座，伤害 '+fmt(res.terrain.dmg)+'）</b></div>' : '')+
-    (res.airSprings ? '<div class="kv"><span>踩弹簧腾空（这 0.5 秒算飞狼）</span><b>'+res.airSprings+' 次</b></div>' : '')+
+    ((res.airSprings || (res.skillLog||{})["弹簧"]) ?
+      '<div class="kv"><span>踩弹簧</span><b>'+(((res.skillLog||{})["弹簧"]||0) + (res.airSprings||0))+' 次</b></div>' : '')+
     (res.boxBlasts ? '<div class="kv"><span>爆炸箱爆炸</span><b>'+res.boxBlasts+' 次（撞箱 '+res.boxPushes+' 次，炸到的塔会变灰）</b></div>' : '')+
     (res.rebornFix ? '<div class="kv"><span>转生成陆地狼后走回走狼路线</span><b>'+res.rebornFix+' 只</b></div>' : '')+
     '<div class="kv"><span>模拟用时</span><b>'+res.time.toFixed(1)+' 秒</b></div>'+
@@ -3203,6 +3447,8 @@ function skillRow(res){
     (res.flyers ? '（本波会飞的狼 '+res.flyers+' 只）' : '')+'</div>';
 }
 function wolfName(id){ return (D.wolfs[id]||{}).name || id; }
+/* 变身 / 转生 / 重生的名字后缀用「·N」，这里取回本名 */
+function baseName(n){ return String(n || "").split("·")[0]; }
 function simScore(){
   const v = +document.getElementById("simScore").value || 0;
   return Math.max(0, v);
@@ -3339,6 +3585,9 @@ function renderWave(){
     '<div class="kv"><span>波内狼数</span><b>'+w.total+' 只</b></div>'+
     '<div class="kv"><span>总血量</span><b>'+fmt(sumHp)+'</b></div>'+
     '<div class="kv"><span>平均血量</span><b>'+fmt(w.total? Math.round(sumHp/w.total):0)+'</b></div>'+
+    (w.final ? '<div class="kv"><span>关底 BOSS</span><b>'+
+        ((w.bossNames && w.bossNames.length) ? w.bossNames.join("、")+"（红色三角）" : "无")+'</b></div>'+
+        '<div class="note">这一波里没被点名的狼是普通随从，动画里按普通狼显示。</div>' : '')+
     '<div style="margin-top:4px">'+parts.join("<br>")+'</div>';
 }
 function selectMap(i){
@@ -3349,6 +3598,9 @@ function selectMap(i){
   state.chapter = m.chapter;
   if(m.custom) syncCustomSize(m);
   state.align = rec(m).align || {x:0,y:0,s:100};
+  const rm = rateMulOf(m);                 // 本图塔攻速倍率
+  document.getElementById("rateMul").value = rm;
+  document.getElementById("rateMulNum").value = rm;
   document.getElementById("alX").value = state.align.x;
   document.getElementById("alY").value = state.align.y;
   document.getElementById("alS").value = state.align.s;
@@ -3375,8 +3627,7 @@ function syncCustomSize(m){
 }
 function renderCustom(){
   const m = cur();
-  const box = document.getElementById("customBox");
-  box.style.display = m.custom ? "block" : "none";
+  document.getElementById("customCard").style.display = m.custom ? "block" : "none";
   if(!m.custom) return;
   document.getElementById("cusCols").value = m.cols;
   document.getElementById("cusRows").value = m.rows;
@@ -3454,7 +3705,48 @@ function renderBrushes(){
     el.onclick = ()=>{ state.brush=b.t; renderBrushes(); };
     box.appendChild(el);
   });
+  // 特殊地形符号：可以放别张图里出现过的障碍（自定义地图常用）
+  const sel = document.createElement("select");
+  sel.style.maxWidth = "132px";
+  allFeatureNames().forEach(n=>{
+    const o = document.createElement("option");
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  });
+  if(typeof state.brush === "string" && state.brush.indexOf("feat:") === 0) sel.value = state.brush.slice(5);
+  const pick = ()=>{ state.brush = "feat:" + sel.value; renderBrushes(); };
+  sel.onchange = pick;
+  const put = document.createElement("button");
+  put.className = "chip" + (typeof state.brush === "string" && state.brush.indexOf("feat:") === 0 && state.brush.length > 5 ? " on" : "");
+  put.textContent = "放符号";
+  put.onclick = pick;
+  const clr = document.createElement("button");
+  clr.className = "chip" + (state.brush === "feat:" ? " on" : "");
+  clr.textContent = "清除符号";
+  clr.onclick = ()=>{ state.brush = "feat:"; renderBrushes(); };
+  box.appendChild(put); box.appendChild(sel); box.appendChild(clr);
   box.style.display = state.tool==="terrain" ? "flex" : "none";
+}
+/* 所有地图里出现过的特殊地形名（给「改地形」放符号用） */
+function allFeatureNames(){
+  const set = new Set();
+  (D.maps||[]).forEach(m=>{ const f = m.feat || {}; for(const k in f) set.add(f[k]); });
+  ["爆炸箱","弹簧","传送带","钢网桥","有洞的钢网桥","沼地","铁路","带棚铁路段","桥","河岸与桥","峡谷与桥",
+   "障碍","核电厂","反应炉","火山","火山盆地","火山盆地边缘","雪山走道","雪山地洞","熔岩沟","石板路",
+   "雕像周围区","毒增强塔位","特殊塔位","雕像","金字塔"].forEach(n=>set.add(n));
+  return Array.from(set).sort();
+}
+/* 「改地形」画笔：数字 = 改格子类型；"feat:名称" = 放/清特殊地形符号 */
+function setTerrain(r, c){
+  const R = rec();
+  if(typeof state.brush === "string" && state.brush.indexOf("feat:") === 0){
+    R.feat = R.feat || {};
+    const name = state.brush.slice(5);
+    if(name) R.feat[r+"_"+c] = name;
+    else delete R.feat[r+"_"+c];
+    return;
+  }
+  R.terrain[r+"_"+c] = state.brush;
 }
 function evtCell(ev){
   const rect = cv.getBoundingClientRect();
@@ -3476,7 +3768,7 @@ cv.addEventListener("mousedown", ev=>{
   }
   if(state.tool==="terrain"){
     snapshot();
-    rec().terrain[r+"_"+c] = state.brush;
+    setTerrain(r, c);
     save(); draw(); renderStats(); checkPath(); return;
   }
   if(ev.ctrlKey){ painting = true; snapshot(); }   // Ctrl+左键拖动 = 连续造同样的塔（整批只记一次撤销）
@@ -3516,7 +3808,7 @@ cv.addEventListener("mousemove", ev=>{
   let s = "第 "+(r+1)+" 行 第 "+(c+1)+" 列 · " + (villageArea ? "羊村范围（不可通行、不可建塔）" : TYPE_NAME[t]);
   const lab = m.labels[r+"_"+c];
   if(lab) s += " · "+lab;
-  const ft = (m.feat||{})[r+"_"+c];
+  const ft = featAt(m,r,c);
   if(t === 4 || t === 5){                       // 传送阵：标出颜色，方便知道哪个对哪个
     const g = teleGroupOf(m, r, c) || {label:"同色", in:[], out:[]};
     s += " · " + g.label + "传送阵（" + (t===4 ? "入口" : "出口") + "）：本图这组有 " +
@@ -3693,6 +3985,19 @@ document.getElementById("tgFly").onclick = e=>{ state.showFly=!state.showFly; e.
 document.getElementById("tgRange").onclick = e=>{ state.showRange=!state.showRange; e.target.classList.toggle("on",state.showRange); draw(); };
 document.getElementById("tgGrid").onclick = e=>{ state.showGrid=!state.showGrid; e.target.classList.toggle("on",state.showGrid); draw(); };
 document.getElementById("rangeAlpha").oninput = e=>{ state.rangeAlpha = +e.target.value/100; draw(); };
+/* 本图塔攻速倍率（0.1~2.0，存在这张图的存档里） */
+function rateMulOf(m){ const r = rec(m||cur()).rateMul; return (r == null) ? 2 : r; }
+function setRateMul(v){
+  v = Math.max(0.1, Math.min(2, +v || 1));
+  v = Math.round(v*20)/20;
+  rec().rateMul = v;
+  document.getElementById("rateMul").value = v;
+  document.getElementById("rateMulNum").value = v;
+  save();
+  setHint("本图塔攻速倍率 = " + v + (v === 1 ? "（按面板数值）" : ""));
+}
+document.getElementById("rateMul").oninput = e=>setRateMul(e.target.value);
+document.getElementById("rateMulNum").oninput = e=>setRateMul(e.target.value);
 /* 路线颜色（色盲 / 深色底图看不清时可以自己改） */
 document.getElementById("colorPath").oninput = e=>{ state.colorPath = e.target.value; saveColorPrefs(); renderLegend(); draw(); };
 document.getElementById("colorFly").oninput = e=>{ state.colorFly = e.target.value; saveColorPrefs(); renderLegend(); draw(); };
@@ -3747,6 +4052,36 @@ document.getElementById("btnResetAll").onclick = ()=>{
   renderStats(); renderSpecs(); renderNotes(); renderLegend(); renderWolfPanel(); renderWave(); checkPath();
   renderSim(null);
   setHint("已全部重置为初始状态");
+};
+/* 关底 Boss 波：本图的 BOSS 序列（一律用满进度数值），用来测当前布防能不能通关 */
+document.getElementById("btnFinal").onclick = ()=>{
+  const m = cur();
+  if(m.chapter === 0){ setHint("大本营防线不做模拟出狼"); return; }
+  const cfg = m.wolf || {};
+  const ids = (cfg.boss || []).filter(id=>D.wolfs[id]);
+  if(!ids.length){ setHint("这张图没有关底 Boss 配置"); return; }
+  const scoreMax = cfg.scoreMax || 0;
+  const L = Math.sqrt(Math.max(0, (cfg.hardA||0) + (cfg.hardB||0)*scoreMax));   // 满进度
+  const diff = simDiff();
+  /* 这一波里真正的关底 BOSS：百科「前线各图银币经验」的「BOSS、血量」列点名的那几只
+     （例：巴罗村＝大犬蠢仪狼）。没被点名的就是普通随从狼，动画里按普通狼显示。 */
+  const bossSet = new Set(cfg.finalBoss || []);
+  const list = ids.map(id=>({ id, hp: wolfHp(id, L, diff), boss: bossSet.has(id) }));
+  const counts = {};
+  ids.forEach(id=>{ counts[id] = (counts[id]||0)+1; });
+  const bossNames = [];
+  list.forEach(t=>{
+    if(!t.boss) return;
+    const k = bossNames.indexOf(wolfName(t.id));
+    if(k < 0) bossNames.push(wolfName(t.id));
+  });
+  lastWave = {
+    list, counts:[list.length], level:L, diff, total:list.length, final:true,
+    bossNames,
+    ids: Object.keys(counts).map(id=>({ id, n:counts[id], hp:wolfHp(id, L, diff) })),
+  };
+  renderWave();
+  setHint("已生成关底 Boss 波（满进度 "+scoreMax+"，共 "+list.length+" 只；其中关底 BOSS "+bossNames.length+" 种）");
 };
 /* 随机 Boss：按本图 random_boss 的累计概率抽一个 */
 document.getElementById("btnBoss").onclick = ()=>{
@@ -3951,6 +4286,20 @@ document.getElementById("cusRename").onclick = ()=>{
   ensureCustomMaps();
   selectMap(D.maps.findIndex(x=>x.name===name));
   setHint("已改名为「"+name+"」");
+};
+document.getElementById("cusDel").onclick = ()=>{
+  const m = cur();
+  if(!m.custom) return;
+  if(!confirm("删除自定义地图「"+m.name+"」？这张图上的地形和建筑会一起删掉。")) return;
+  const defs = customDefs();
+  const i = defs.findIndex(d=>d.name === m.name);
+  if(i >= 0) defs.splice(i, 1);
+  delete state.data.maps[m.name];
+  save();
+  ensureCustomMaps();
+  selectMap(0);
+  renderCustom();
+  setHint("已删除自定义地图「"+m.name+"」");
 };
 document.getElementById("cusApply").onclick = ()=>{
   const m = cur();

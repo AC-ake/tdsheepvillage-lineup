@@ -40,6 +40,9 @@ FRAME_STYLES = {"medium", "thick", "double"}
 
 ARROWS = {"\u2192": "right", "\u2190": "left", "\u2191": "up", "\u2193": "down"}
 
+# 百科「BOSS、血量」列里的名称和游戏配置偶尔差一个字（已知：比丘村写成「红发饿狼」）
+BOSS_NAME_FIX = {"红发饿狼": "红发恶狼"}
+
 T_BLOCKED = 0
 T_OPEN = 1
 T_ENTRANCE = 2
@@ -1071,6 +1074,105 @@ def export_references(maps):
             best["refs"].append("refs/" + ref_name)
 
 
+def read_pdf_income(maps):
+    """参考收入：取自《保卫羊村全地图布局参考》每页的「参考银币收入：N」
+       —— 也就是这张图不引狼、每波 +2 的参考总和（工具界面上显示的就是它）。"""
+    try:
+        from pypdf import PdfReader
+    except Exception:
+        return
+    if not os.path.exists(PDF):
+        return
+    reader = PdfReader(PDF)
+    by_no = {m.get("no"): m for m in maps if m.get("no")}
+    for page in reader.pages:
+        try:
+            flat = re.sub(r"\s+", "", page.extract_text() or "")
+        except Exception:
+            continue
+        if not flat:
+            continue
+        val = re.search(r"参考银币收入：([0-9]+|无限)", flat)
+        if not val:
+            continue
+        tail = re.sub(r"^.*?第[一二三四五六七八九十]+大图", "", flat)
+        num = re.match(r"(\d{1,2})", tail)
+        if not num:
+            continue
+        target = by_no.get(int(num.group(1)))
+        if target is None:
+            continue
+        target["income"] = "无限" if val.group(1) == "无限" else val.group(1)
+
+
+def read_income_sheet(wb, maps):
+    """参考收入：取百科「前线各图银币经验」表的「最高银币」列（新版优先）。
+
+    表头：A 编号 / B 地图 / C 完成度 / D 最高银币 / E 最高经验 / F 总银币 / G BOSS、血量 / H 备注
+    D 列有时写成「643(新版1026)」，按新版取值；「∞(未知)」当作没有数据。
+    G 列是这张图关底那一波的「BOSS、血量」清单（例：巴罗村＝大犬蠢仪狼 8000），
+    后面 boss_ids_from_text() 用它挑出这一波里真正的关底 BOSS，其余的算普通狼。
+    """
+    if "前线各图银币经验" not in wb.sheetnames:
+        return
+    ws = wb["前线各图银币经验"]
+    by_name = {}
+    for m in maps:
+        for name in (m.get("alias") or [m["name"]]):
+            by_name[str(name).strip()] = m
+    for row in ws.iter_rows(min_row=2, max_row=60, max_col=7):
+        nm = row[1].value
+        val = row[3].value
+        boss = row[6].value
+        if not isinstance(nm, str) or not nm.strip():
+            continue
+        m = by_name.get(nm.strip())
+        if m is None:
+            continue
+        if isinstance(boss, str) and boss.strip() and not m.get("bossText"):
+            m["bossText"] = boss.strip()
+        if m.get("income"):
+            continue
+        s = "" if val is None else str(val)
+        new = re.search(r"新版\s*([0-9]+)", s)
+        if new:
+            m["income"] = new.group(1)
+        elif re.fullmatch(r"[0-9]+(?:\.0)?", s.strip()):
+            m["income"] = str(int(float(s.strip())))
+
+
+def boss_ids_from_text(text, boss_ids, name_of):
+    """从百科「BOSS、血量」列的文字里挑出关底那一波里真正的 BOSS 编号。
+
+    文字形如「特洛伊木狼 380万+管理员克里 761691+冒牌丘比特 448053×2+…」，
+    每段取「名字」部分（去掉后面的 ex、数字、括号备注）再和狼名做「完全相等」比对，
+    这样「自爆狼王」不会被误当成「自爆狼」。没列进去的就是普通随从狼。
+    """
+    if not text:
+        return []
+    def norm(s):
+        s = str(s)
+        for a, b in BOSS_NAME_FIX.items():
+            s = s.replace(a, b)
+        return re.sub(r"[\u00b7\u30fb\s]+", "", s)
+    names = set()
+    for part in str(text).split("+"):
+        part = part.strip()
+        if not part:
+            continue
+        head = re.split(r"[\s0-9\uff08(]", part)[0]
+        head = re.sub(r"(?i)ex$", "", head).strip()
+        if head:
+            names.add(norm(head))
+    out = []
+    for wid in (boss_ids or []):
+        if wid in out:
+            continue
+        if norm(name_of(wid)) in names:
+            out.append(wid)
+    return out
+
+
 def main():
     unzip_media()
     wb = openpyxl.load_workbook(XLSX, data_only=True)
@@ -1166,11 +1268,14 @@ def main():
     # 大本营防线与 38 号「防线」是同一张图，参考收入沿用
     twin = next((m for m in maps if m["name"] == "防线"), None)
     extra = next((m for m in maps if m["name"] == "大本营防线"), None)
+    read_income_sheet(wb, maps)          # 先按百科「最高银币」兜底
+    read_pdf_income(maps)                # 再用《全地图布局参考》的「参考银币收入」覆盖（这才是要显示的）
     if twin and extra and not extra.get("income"):
         extra["income"] = twin.get("income")
 
     # 每张图的出狼配置（大本营防线用「防线」的）
     map_wolf, wolfs, wave_diff = read_wolves()
+    wolf_name_of = lambda wid: (wolfs.get(wid) or {}).get("name") or wid
     for m in maps:
         cfg = map_wolf.get(m["name"])
         if cfg is None and m["name"] == "大本营防线":
@@ -1194,6 +1299,17 @@ def main():
             if cc < len(row):
                 m["grid"][rr] = row[:cc] + str(t) + row[cc+1:]
                 m.get("feat", {}).pop(pos, None)
+
+    # 关底 BOSS 名单：百科「BOSS、血量」列点名的那几只才是关底 BOSS，
+    # 这一波里没被点名的算普通随从狼（大本营防线跟「防线」是同一张图，沿用它的名单）。
+    sheet_boss = {m["name"]: m["bossText"] for m in maps if m.get("bossText")}
+    for m in maps:
+        text = m.pop("bossText", None)
+        if text is None and m["name"] == "大本营防线":
+            text = sheet_boss.get("防线")
+        w = m.get("wolf")
+        if w is not None and text:
+            w["finalBoss"] = boss_ids_from_text(text, w.get("boss"), wolf_name_of)
 
     front = read_table(wb, "各种塔造价、攻击力", TOWER_DEFS)
     defend = read_table(wb, "防线塔造价、经验", TOWER_DEFS,
