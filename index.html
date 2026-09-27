@@ -351,6 +351,7 @@
       <button class="chip" id="btnFinal">生成关底Boss波</button>
         <button class="chip" id="btnWave">随机生成一波</button>
         <button class="chip" id="btnSim">模拟走狼</button>
+        <button class="chip" id="btnPause" style="display:none">暂停</button>
         <select id="simSpeed" title="动画倍速">
           <option value="1">1×</option>
           <option value="2" selected>2×</option>
@@ -358,6 +359,10 @@
           <option value="8">8×</option>
           <option value="16">16×</option>
         </select>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <button class="chip" id="tgSkillTag" title="动画里在狼名字下面显示正在放的技能">技能名</button>
+        <button class="chip" id="tgTowerFx" title="动画里在狼名字上面显示塔造成的眩晕 / 击退 / 沉默 / 暴击 / 燃烧 / 剧毒 / 减速">塔状态</button>
       </div>
       <div id="waveResult" class="note" style="margin-top:6px"></div>
       <div id="bossResult" class="note" style="margin-top:6px"></div>
@@ -384,6 +389,12 @@
       <button class="chip" id="btnSeedLoad">载入种子码</button>
     </div>
     <div class="note" id="seedHint" style="margin-top:4px"></div>
+    <div class="row" style="margin-top:6px">
+      <button class="chip" id="btnSaveExport">导出全部存档</button>
+      <button class="chip" id="btnSaveImport">导入全部存档</button>
+      <input type="file" id="saveFile" accept=".json,application/json" style="display:none">
+    </div>
+    <div class="note" id="saveHint" style="margin-top:4px">种子码：当前图　·　存档：所有图</div>
 
     </div></div><div class="section-card"><div class="section-title">更新</div><div class="section-body">
     <div class="note" id="updSrc" style="word-break:break-all"></div>
@@ -402,7 +413,7 @@
 <script>
 /* ---------------- 版本 / 自动更新 ----------------
    发布新版本时：把这里的版本号 + 同目录的 version.json 一起改成新版本号再上传即可。 */
-window.YC_LOCAL_VERSION = "1.5.4";
+window.YC_LOCAL_VERSION = "1.5.4.1";
 /* 版本号比较：1.10 > 1.9 */
 window.YC_NEWER = function(a, b){
   var pa = String(a).split("."), pb = String(b).split(".");
@@ -477,8 +488,19 @@ const state = {
 };
 /* 路线颜色：默认黄=走狼、蓝=飞行，可以自己改（存进存档，下次打开还是自己选的颜色） */
 const COLOR_DEFAULT = { path:"#ffee58", fly:"#63d2ff" };
+/* 塔给狼的状态字颜色（动画里写在狼名字上方） */
+const FX_COLOR = { "眩晕":"#ffd24d", "击退":"#c07bff", "沉默":"#1b1b1b",
+                   "暴击":"#ffd24d", "燃烧":"#ff5252", "剧毒":"#6ddc6d", "减速":"#6fb8ff" };
 state.colorPath = (state.data.ui && state.data.ui.colorPath) || COLOR_DEFAULT.path;
 state.colorFly  = (state.data.ui && state.data.ui.colorFly)  || COLOR_DEFAULT.fly;
+/* 动画里要不要显示「技能名」「塔给的状态」：存在存档里，下次打开保持 */
+state.showSkillTag = !(state.data.ui && state.data.ui.skillTag === false);
+state.showTowerFx  = !(state.data.ui && state.data.ui.towerFx === false);
+function saveUiToggle(){
+  state.data.ui = Object.assign({}, state.data.ui,
+    { skillTag: state.showSkillTag, towerFx: state.showTowerFx });
+  save();
+}
 function saveColorPrefs(){
   state.data.ui = Object.assign({}, state.data.ui, {colorPath: state.colorPath, colorFly: state.colorFly});
   save();
@@ -1599,13 +1621,7 @@ function checkPath(){
   }
   if(mapHasFlyer(m)){
     const fly = flyRouteList();
-    if(fly.length){
-      const shaped = flyAlternates(m).alts;
-      html += '<div class="note" style="margin-top:4px">本图有会飞的狼：飞行路线 '+fly.length+' 条，长度：' +
-              shaped.map(list=>list[0].length).join(" / ")+' 格，每条出狼口有 ' +
-              shaped.map(list=>list.length).join(" / ")+' 种拐法（按飞行高度 1100 算：地图外围的高山、' +
-              '特殊塔位上的高塔飞不过去，需要绕路；全程拐弯 2~4 次、不会往回飞）。</div>';
-    }
+    if(fly.length) html += '<div class="note" style="margin-top:4px">本图有会飞的狼。</div>';
   }
   box.innerHTML = html;
 }
@@ -1943,7 +1959,7 @@ const TICK = 0.04, UNIT = 1 / 1000;
 /* 传送带：格子上箭头方向与狼的前进方向一致就加速、不一致就减速。
    百科只写了「一致加速、反之减速」没给数值，先按 ±10% 设定，之后再按实测调。
    （游戏配置里的 conveyer_speed 是 12，等确认单位后可以换成它） */
-const BELT_GAIN = 0.30;      // 传送带顺行 +30% / 逆行 -30%
+const BELT_GAIN = 0.30;      // 传送带顺行 +30% / 逆行 -30%（按基础速度【累加】到当前速度，见速度计算那一段）
 const BELT_DIR_VEC = {right:[0,1], left:[0,-1], up:[-1,0], down:[1,0]};
 /* 爆炸箱爆炸：百科只写了「推 4 次会爆炸」，数值按自爆狼的效果和时间来
    （自爆狼 Burst_Z1 = [2000, 2]：范围 2 格、塔被乌云罩住 2 秒；
@@ -1958,6 +1974,9 @@ const CHAIN_MAX_DIST = 3.0;
 const SIM_MAX_T = 240;        // 一次模拟最多跑 4 分钟（够狼走完全程；分身多了也不会算到超时）
 const MAX_WOLVES = 150;       // 场上的狼上限（召唤 / 分身 / 转生都受这个限制）
 const CAST_KINDS = {summon:1, cloud:1, massTreatment:1, shield:1, morph:1};   // 有前摇、能被打断的技能
+/* 例外：装甲运狼车（哪怕它是随机 Boss）倒地转生出来的 4 只小突袭狼是普通狼，
+   不带 Boss 图标；其它转生 / 变身 / 重生出来的单位照旧继承 Boss 标记。 */
+const NO_BOSS_KIDS = new Set(["zjylc"]);
 const DEATH_KINDS = {revive:1, reborn:1, burst:1};                             // 死亡触发（瞬发，沉默打不断）
 function skillNum(v, d){ return (typeof v === "number" && isFinite(v)) ? v : d; }
 function wolfSkillList(id){ return (D.wolfSkills || {})[id] || []; }
@@ -2596,6 +2615,8 @@ function simulateWalk(){
       airT: 0,                     // 踩弹簧腾空到什么时候（这期间算飞狼）
       corridor: null, charm: 0,    // 走的通道 + 这只狼的寻路吸引力（进村/倒地时要把开销还原）
       fixFrom: null, fixTo: null, fixT: 0,   // 转生出来的陆地狼从障碍物之间走回走狼路线
+      fx: [],                      // 塔给它的状态（眩晕 / 击退 / 沉默 / 暴击 / 燃烧 / 剧毒 / 减速）
+      skillTags: [],               // 正在放（或刚放过）的技能，动画里按先后顺序显示
     };
     // 技能表：被动（飞行 / 免疫电 / 无敌 / 减速粒子）当场生效，主动技能进技能时钟
     wolfSkillList(id).forEach(s=>{
@@ -2655,7 +2676,29 @@ function simulateWalk(){
       rec.charm = (D.wolfs[id] || {}).charm || 0;
       setCharm(chosen, rec.charm);
     }
-    if(from){
+    /* 召唤 / 转生 / 变身 出来的飞行狼：飞行路线以「本体当时站的那一格」为起点重新算一条
+       （以前是直接跳到离本体最近的现成飞行路线上，看着像瞬移），终点仍然是入村口。 */
+    let fromHere = false;
+    if(from && rec.fly && !isMirror){
+      const p0 = wolfPoint(from);
+      const sc = [Math.max(0, Math.min(m.rows-1, Math.floor(p0[0]))),
+                  Math.max(0, Math.min(m.cols-1, Math.floor(p0[1])))];
+      const base = reRoute(sc, true);          // 从这一格飞到入村口的路
+      if(base && base.length > 1){
+        const list2 = (function(){
+          const v = flyVariants(m, base, airMap(m, false));
+          return v.length ? v : [base];
+        })();
+        let best2 = list2[0], bs = -Infinity;
+        list2.forEach(p=>{ const s = (p.score || 0) + Math.random()*0.6; if(s > bs){ bs = s; best2 = p; } });
+        rec.route = best2.slice();             // 第一格就是本体所在格，不再往下挪
+        rec.corridor = best2.slice();
+        rec.routeIdx = 0;
+        rec.pos = 0;
+        fromHere = true;
+      }
+    }
+    if(from && !fromHere){
       const cur = wolfPoint(from);
       let best = 0, bd = Infinity;
       rec.route.forEach((c, k)=>{
@@ -2681,11 +2724,38 @@ function simulateWalk(){
   });
   let dmgDealt = 0, killed = 0, t = 0;
   const record = [];                 // 每一帧记录狼的位置，用来回放走狼动画
+  /* 技能名在动画里显示到什么时候：持续型技能按它的持续时间，瞬发技能露个脸。
+     被动技能（飞行 / 抗性 / 减速粒子这些）不在技能时钟里，所以不会显示。 */
+  const skillShowUntil = (a, t0)=>{
+    const num = (i, d)=>skillNum(a.p[i], d);
+    switch(a.kind){
+      case "invisible": return t0 + Math.max(0.2, num(4, 1));
+      case "sprint":    return t0 + Math.max(0.5, num(4, 1));
+      case "shield":    return t0 + Math.max(1, num(6, 5));
+      case "taunt":     return t0 + Math.max(1, num(4, 3));
+      case "links":     return t0 + Math.max(1, num(4, 10));
+      case "cloud":     return t0 + Math.max(1, num(6, 5));
+      case "massTreatment": return t0 + 1.5;
+      default:          return t0 + 1.2;          // 召唤 / 分身 / 变身 / 闪烁 / 自爆…
+    }
+  };
+  /* 技能名 / 塔给的状态名都按同一套规矩排队：先生效的排前面，后生效的排后面，
+     各自的持续时间一到就自己消失；同一个名字重复生效只刷新时间，不重复排队。 */
+  const queueTag = (list, name, dur)=>{
+    const until = t + Math.max(0.3, dur || 0);
+    const has = list.find(a=>a.name === name);
+    if(has){ has.until = Math.max(has.until, until); return; }
+    list.push({ name, until });
+  };
+  const tagPush = (w, name, dur)=>{ if(w && name) queueTag(w.skillTags, name, dur); };
+  const fxPush  = (w, name, dur)=>{ if(w && name) queueTag(w.fx, name, dur); };
+  const tagText = (list)=> list.filter(a=>a.until > t).map(a=>a.name).join("·");
   /* 沉默 / 眩晕 / 击退 / 威吓都会打断正在前摇的非瞬发技能（复活、转生、自爆是瞬发，不受影响） */
   const interrupt = (w)=>{
     if(!w.cast) return;
     w.cast.skill.cdLeft = Math.max(w.cast.skill.cdLeft, w.cast.skill.cd);
     w.cast = null;
+    w.skillTags.length = 0;
   };
   /* 死亡处理：重生（原地满血复活）→ 转生（换成另一批狼）→ 自爆（罩住附近的塔）→ 真的死 */
   const die = (w)=>{
@@ -2697,6 +2767,7 @@ function simulateWalk(){
     const rv = w.skills.find(a=>a.kind === "revive");
     if(rv && rv.left > 0){
       rv.left--; bump(w, "重生");
+      tagPush(w, "重生", 1.5);                                       // 动画里亮一下技能名
       w.revives = (w.revives || 0) + 1;
       w.name = baseName(w.name) + "·" + w.revives;      // 僵尸狼·1、僵尸狼·2…
       w.hp = Math.max(1, Math.round(w.hpMax * Math.max(0.05, skillNum(rv.p[1], 0.5))));
@@ -2718,6 +2789,8 @@ function simulateWalk(){
         const cap = Math.max(1, Math.round(w.hpMax));
         const hp = one ? cap : Math.min(Math.max(1, Math.round(wolfHp(id, wave.level, wave.diff))), cap);
         const o = mk(id, hp, t, 0, w, false, hp);
+        o.boss = w.boss && !NO_BOSS_KIDS.has(w.id);   // Boss 转生后仍是 Boss（装甲运狼车的小突袭狼例外）
+        tagPush(o, "转生", 1.5);
         // 名字提示：一对一转生成陆地形态 →「·陆」；一对多 →「·1」「·2」…
         o.name = baseName(w.name) + (one && wasAir && !o.fly ? "·陆" : "·" + (k + 1));
         // 天空萝莉这类：本体在天上，转生出来的是陆地狼，落点在障碍物 / 建筑之间时，
@@ -2741,6 +2814,7 @@ function simulateWalk(){
   /* 技能真正生效。前摇结束（或瞬发）时调用 */
   const castDone = (w, a)=>{
     const p = a.p, bp = wolfPoint(w);
+    tagPush(w, a.name, skillShowUntil(a, t) - t);                 // 动画里在名字下面显示技能名
     const near = (range)=>wolves.filter(o=>{
       if(o.done || o === w) return false;
       const q = wolfPoint(o);
@@ -2784,8 +2858,10 @@ function simulateWalk(){
         if(id && D.wolfs[id]){
           const n = Math.max(1, Math.min(8, Math.round(skillNum(p[6], 1))));
           const ratio = Math.max(0.05, skillNum(p[7], 1));
+          /* wiki：召唤出来的狼「和自身同级，血量倍率为 1，但最大血量额外乘上倍率参数（强度）」，
+             并且「血量跟难度系数无关」——所以按同级的血量乘强度算，不再乘波难度。 */
           for(let k=0;k<n && canSpawn();k++)
-            pending.push(mk(id, Math.max(1, Math.round(wolfHp(id, wave.level, wave.diff)*ratio)), t, 0, w));
+            pending.push(mk(id, Math.max(1, Math.round(wolfHp(id, wave.level, 1)*ratio)), t, 0, w));
         }
         break;
       }
@@ -2809,6 +2885,8 @@ function simulateWalk(){
           // 如果变来变去还是同一个名字（异变科里尔），才加「·1」「·2」标第几形态
           w.morphs = (w.morphs || 0) + 1;
           const nw = mk(id, Math.max(1, Math.round(w.hpMax)), t, 0, w, false, Math.max(1, Math.round(w.hpMax)));
+          nw.boss = w.boss;                     // Boss 变身后仍然是 Boss（三角图标不能变回普通狼）
+          tagPush(nw, "变身", 1.5);
           const nn = wolfName(id);
           nw.name = (nn === baseName(w.name)) ? nn + "·" + w.morphs : nn;
           nw.morphs = w.morphs;
@@ -2885,7 +2963,10 @@ function simulateWalk(){
           if(w.cast || w.silenceT > 0 || w.stunT > 0) continue;
           if(Math.random() >= a.prob) continue;              // 每帧按概率尝试，失败下一帧再试
           a.cdLeft = a.cd;
-          if(a.castTime > 0) w.cast = { skill:a, left:a.castTime };
+          if(a.castTime > 0){
+            w.cast = { skill:a, left:a.castTime };
+            tagPush(w, a.name, a.castTime);                       // 前摇期间先把技能名亮出来
+          }
           else castDone(w, a);
         }
       }
@@ -2911,6 +2992,7 @@ function simulateWalk(){
           if(Math.hypot(q[0]-cp[0], q[1]-cp[1]) <= 1){
             o.silenceT = Math.max(o.silenceT, 2 * Math.max(0, 1 - (o.res.silence || 0)));
             interrupt(o);
+            fxPush(o, "沉默", 2 * Math.max(0, 1 - (o.res.silence || 0)));
           }
         });
         w.cuss = null;
@@ -2946,19 +3028,25 @@ function simulateWalk(){
         // 笔记里的速度计算最后有一句 max(1, …)：速度有下限（1 单位/帧），
         // 所以「怕冰」的狼被冰到 100% 以上时是几乎不动，而不是彻底停死
         const minSpeed = UNIT * 25;
-        // 传送带：箭头和狼的前进方向一致 ＝ 加速，不一致 ＝ 减速（百科）
-        let beltMul = 1;
+        /* 传送带：箭头和狼的前进方向一致 ＝ 加速，不一致 ＝ 减速（百科）。
+           注意这里按「基础速度的百分比」【累加】到当前速度上，而不是像冰霜减速那样乘算：
+           所以被冰得够狠的狼踩在逆行带上，速度会算成负数 —— 那就会真的往后退。
+           只有逆行传送带能造成这种后退（冰霜减速是乘算，永远不会变成负数）。 */
+        let beltAdd = 0;
         if(!w.fly && m.belt){
           const i0 = Math.min(Math.floor(w.pos), w.route.length-1);
           const cell = w.route[i0], nxt = w.route[Math.min(i0+1, w.route.length-1)];
           const dir = m.belt[cell[0]+"_"+cell[1]];
           if(dir && Math.abs(nxt[0]-cell[0]) + Math.abs(nxt[1]-cell[1]) === 1){
             const bv = BELT_DIR_VEC[dir], mv = [Math.sign(nxt[0]-cell[0]), Math.sign(nxt[1]-cell[1])];
-            beltMul = (bv && bv[0] === mv[0] && bv[1] === mv[1]) ? 1 + BELT_GAIN : 1 - BELT_GAIN;
-            if(beltMul > 1) belt.fast++; else belt.slow++;
+            const same = bv && bv[0] === mv[0] && bv[1] === mv[1];
+            beltAdd = same ? BELT_GAIN : -BELT_GAIN;
+            if(same) belt.fast++; else belt.slow++;
           }
         }
-        w.pos += Math.max(minSpeed, w.speed * slowFactor * run * beltMul) * TICK;
+        const speedNow = w.speed * slowFactor * run + w.speed * beltAdd;
+        if(speedNow < 0) w.pos = Math.max(0, w.pos + speedNow * TICK);   // 逆行带把狼推回去
+        else w.pos += Math.max(minSpeed, speedNow) * TICK;
       }
       if(!w.stuck && w.pos >= w.route.length - 1){
         w.pos = w.route.length - 1;
@@ -3073,7 +3161,9 @@ function simulateWalk(){
         const p = wolfPoint(w);
         // r/c 就是地图的行列，和走狼路线用的是同一套坐标
         return { k:wi, r:p[0], c:p[1], name:w.name, fly:!!w.fly, hp:Math.max(0,Math.round(w.hp)),
-                 hide: w.hideUntil > t || inPyramid(m, w), silence: w.silenceT > 0, boss: !!w.boss };
+                 hide: w.hideUntil > t || inPyramid(m, w), silence: w.silenceT > 0, boss: !!w.boss,
+                 skill: tagText(w.skillTags) || null,
+                 fx: tagText(w.fx) || null };
       }).filter(Boolean) });
     }
     for(const T of towers){
@@ -3113,7 +3203,8 @@ function simulateWalk(){
         const res = w.res || {};
         if(T.elec) dmg *= Math.max(0, 1 - (res.light || 0));   // 免疫电：完全无视闪电攻击
         if(T.light) dmg *= Math.max(0, 1 - (res.light || 0));  // 光塔：抗光减伤 / 怕光增伤
-        if(withEffect && T.crit && Math.random() < T.crit.chance*Math.max(0, 1 - (res.crit || 0))) dmg *= T.crit.mul;
+        let crit = false;
+        if(withEffect && T.crit && Math.random() < T.crit.chance*Math.max(0, 1 - (res.crit || 0))){ dmg *= T.crit.mul; crit = true; }
         if(w.dr > 0) dmg *= (1 - w.dr);                        // 无敌（如 dio 的 99% 减伤）
         if(w.shield && w.shield.until > t) dmg *= (1 - w.shield.red);   // 护盾减伤
         // 灵魂治愈：附近的治疗狼替它扛一部分伤害
@@ -3134,21 +3225,25 @@ function simulateWalk(){
         w.hitsTaken = (w.hitsTaken || 0) + 1;
         if(w.hp <= 0) die(w);
         if(!withEffect) return;
+        if(crit) fxPush(w, "暴击", 1.2);                       // 名子上方的状态字
         const mul = isAir(w, t) ? T.airMul : 1;               // 踩弹簧腾空的 0.5 秒也算空中单位
         if(T.slow){
           const tier = T.gemTier;
           if(!(w.slowT > 0) || tier >= (w.slowTier || 0)){ w.slow = T.slow/100*mul*NER; w.slowTier = tier; }
           else w.slow = Math.max(w.slow, T.slow/100*mul*NER);
           w.slowT = 3;
+          fxPush(w, "减速", 3);
         }
         if(T.poison){
           const ps = { perSec: T.poison.perSec*mul*NER*Math.max(0, 1 - (res.poison || 0)), dur: T.poison.dur*mul };
           poisonHits++;
           if(!w.poison || ps.perSec > w.poison.perSec) w.poison = ps;
           w.poisonT = T.poison.dur;
+          fxPush(w, "剧毒", T.poison.dur*mul);
         }
         if(T.burn){ burnHits++; w.burns.push({ perSec: T.burn.perSec*mul*NER*Math.max(0, 1 - (res.fire || 0)),
-                                  until: t + T.burn.dur*mul, tier: T.gemTier }); }
+                                  until: t + T.burn.dur*mul, tier: T.gemTier });
+                     fxPush(w, "燃烧", T.burn.dur*mul); }
         // 飞行狼：黄宝石炮塔的溅射眩晕几乎不吃（1%），黄宝石波动塔的眩晕完全不吃
         const vChance = T.vertigo ? T.vertigo.chance *
           (isAir(w, t) ? (T.towerName === "炮塔" ? 0.01 : 0) : 1) *
@@ -3156,11 +3251,13 @@ function simulateWalk(){
         if(T.vertigo && Math.random() < vChance){
           w.stunT = Math.max(w.stunT, T.vertigo.dur);
           interrupt(w);                                   // 眩晕：强制打断非瞬发技能
+          fxPush(w, "眩晕", T.vertigo.dur);
         }
         if(T.timid && Math.random() < T.timid.chance*NER){ w.backT = T.timid.dur; interrupt(w); }
         if(T.knock && Math.random() < T.knock*NER*Math.max(0, 1 - (res.beat || 0))){
           w.pos = Math.max(0, w.pos - 1);
           interrupt(w);                                   // 超长距离击退：打断非瞬发技能
+          fxPush(w, "击退", 1.2);
         }
         if(T.cuss){
           // 黑宝石镶嵌：命中即挂 5 秒诅咒，重复命中会把时间刷新回 5 秒
@@ -3301,6 +3398,8 @@ function playSim(res){
     angles: {},
   };
   document.getElementById("btnSim").textContent = "停止模拟";
+  const pb = document.getElementById("btnPause");
+  pb.style.display = ""; pb.textContent = "暂停";
   document.getElementById("simResult").innerHTML =
     '<span class="note">走狼动画播放中（'+(playback.speed)+'× 倍速）</span>';
   requestAnimationFrame(playFrame);
@@ -3310,12 +3409,20 @@ function stopPlayback(){
   const res = playback.res;
   playback = null;
   document.getElementById("btnSim").textContent = "模拟走狼";
+  document.getElementById("btnPause").style.display = "none";
   renderSim(res);
   draw();
 }
 function playFrame(now){
   const P = playback;
   if(!P) return;
+  // 暂停：时间轴不再往前走，但仍然把当前这一帧画出来（可以停下来慢慢看）
+  if(P.paused){
+    P.last = now;
+    draw();
+    requestAnimationFrame(playFrame);
+    return;
+  }
   const dt = Math.min(0.2, (now - P.last) / 1000);
   P.last = now;
   P.t += dt * P.speed;
@@ -3341,6 +3448,7 @@ function playFrame(now){
   else if(playback === P){
     playback = null;
     document.getElementById("btnSim").textContent = "模拟走狼";
+    document.getElementById("btnPause").style.display = "none";
     renderSim(P.res);
     draw();
   }
@@ -3398,6 +3506,40 @@ function drawWolves(){
     ctx.strokeText(w.name, cx, cy + s*0.75);
     ctx.fillStyle = "#ffffff";
     ctx.fillText(w.name, cx, cy + s*0.75);
+    // 塔给的状态：写在名字【上方】。黑色（沉默）用浅色描边，否则在底图上看不清
+    if(state.showTowerFx && w.fx){
+      const fy = cy + s*0.75 - fs*1.05;
+      ctx.font = Math.max(8, Math.round(fs*0.82))+"px sans-serif";
+      const parts = w.fx.split("·");
+      const gap = ctx.measureText("·").width;
+      let total = 0;
+      parts.forEach((t,i)=>{ total += ctx.measureText(t).width + (i ? gap : 0); });
+      let x2 = cx - total/2;
+      ctx.textAlign = "left";
+      parts.forEach((t,i)=>{
+        if(i){
+          ctx.lineWidth = 3; ctx.strokeStyle = "#0d1215dd";
+          ctx.strokeText("·", x2, fy);
+          ctx.fillStyle = "#ffffff"; ctx.fillText("·", x2, fy);
+          x2 += gap;
+        }
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = (t === "沉默") ? "#ffffffcc" : "#0d1215dd";
+        ctx.strokeText(t, x2, fy);
+        ctx.fillStyle = FX_COLOR[t] || "#ffffff";
+        ctx.fillText(t, x2, fy);
+        x2 += ctx.measureText(t).width;
+      });
+      ctx.textAlign = "center";
+    }
+    if(state.showSkillTag && w.skill){          // 正在放技能：名字下面再写技能名
+      const sy = cy + s*0.75 + fs*1.05;
+      ctx.font = Math.max(8, Math.round(fs*0.82))+"px sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0d1215dd";
+      ctx.strokeText(w.skill, cx, sy);
+      ctx.fillStyle = "#7ee6ff";
+      ctx.fillText(w.skill, cx, sy);
+    }
     ctx.restore();
   });
 }
@@ -3586,8 +3728,7 @@ function renderWave(){
     '<div class="kv"><span>总血量</span><b>'+fmt(sumHp)+'</b></div>'+
     '<div class="kv"><span>平均血量</span><b>'+fmt(w.total? Math.round(sumHp/w.total):0)+'</b></div>'+
     (w.final ? '<div class="kv"><span>关底 BOSS</span><b>'+
-        ((w.bossNames && w.bossNames.length) ? w.bossNames.join("、")+"（红色三角）" : "无")+'</b></div>'+
-        '<div class="note">这一波里没被点名的狼是普通随从，动画里按普通狼显示。</div>' : '')+
+        ((w.bossNames && w.bossNames.length) ? w.bossNames.join("、") : "无")+'</b></div>' : '')+
     '<div style="margin-top:4px">'+parts.join("<br>")+'</div>';
 }
 function selectMap(i){
@@ -3982,6 +4123,19 @@ document.querySelectorAll("#toolList .tool").forEach(b=>b.onclick=()=>{
 document.getElementById("tgBase").onclick = e=>{ state.showBase=!state.showBase; e.target.classList.toggle("on",state.showBase); draw(); };
 document.getElementById("tgPath").onclick = e=>{ state.showPath=!state.showPath; e.target.classList.toggle("on",state.showPath); draw(); };
 document.getElementById("tgFly").onclick = e=>{ state.showFly=!state.showFly; e.target.classList.toggle("on",state.showFly); draw(); };
+/* 走狼预测里：技能名 / 塔状态的显示开关（只影响动画上写不写字） */
+document.getElementById("tgSkillTag").onclick = e=>{
+  state.showSkillTag = !state.showSkillTag;
+  e.target.classList.toggle("on", state.showSkillTag);
+  saveUiToggle(); draw();
+  setHint(state.showSkillTag ? "动画里会显示狼放的技能名" : "动画里不再显示技能名");
+};
+document.getElementById("tgTowerFx").onclick = e=>{
+  state.showTowerFx = !state.showTowerFx;
+  e.target.classList.toggle("on", state.showTowerFx);
+  saveUiToggle(); draw();
+  setHint(state.showTowerFx ? "动画里会显示塔给狼的状态（眩晕、击退、沉默、暴击、燃烧、剧毒、减速）" : "动画里不再显示塔给狼的状态");
+};
 document.getElementById("tgRange").onclick = e=>{ state.showRange=!state.showRange; e.target.classList.toggle("on",state.showRange); draw(); };
 document.getElementById("tgGrid").onclick = e=>{ state.showGrid=!state.showGrid; e.target.classList.toggle("on",state.showGrid); draw(); };
 document.getElementById("rangeAlpha").oninput = e=>{ state.rangeAlpha = +e.target.value/100; draw(); };
@@ -4140,6 +4294,39 @@ document.getElementById("btnSeedCopy").onclick = async ()=>{
 document.getElementById("btnSeedLoad").onclick = ()=>{
   const msg = loadSeed(document.getElementById("seedBox").value);
   document.getElementById("seedHint").textContent = msg;
+};
+/* ---- 整份存档的导出 / 导入：换电脑时一次搬走所有地图的布阵、地形、底图对齐和设置 ---- */
+document.getElementById("btnSaveExport").onclick = ()=>{
+  const d = new Date(), p = n=>String(n).padStart(2, "0");
+  const name = "羊村布阵存档-" + d.getFullYear() + p(d.getMonth()+1) + p(d.getDate()) + ".json";
+  try{
+    const url = URL.createObjectURL(new Blob([JSON.stringify(state.data)], {type:"application/json"}));
+    const a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1500);
+    document.getElementById("saveHint").textContent =
+      "已导出 " + name + "（共 " + Object.keys(state.data.maps || {}).length +
+      " 张图有记录）。把这个文件拷到另一台电脑，用「导入全部存档」读回来。";
+  }catch(e){ document.getElementById("saveHint").textContent = "导出失败：" + e.message; }
+};
+document.getElementById("btnSaveImport").onclick = ()=> document.getElementById("saveFile").click();
+document.getElementById("saveFile").onchange = e=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const obj = JSON.parse(String(rd.result));
+      if(!obj || typeof obj !== "object" || !obj.maps) throw new Error("这不像是本工具的存档文件");
+      if(!confirm("导入会用这份存档覆盖本机现在的全部布阵（存档里 " +
+                  Object.keys(obj.maps).length + " 张图有记录），继续？")) return;
+      state.data = obj;
+      save();
+      location.reload();
+    }catch(err){ document.getElementById("saveHint").textContent = "导入失败：" + err.message; }
+  };
+  rd.readAsText(f);
 };
 /* ---- 检查 / 更新到最新版 ----
    更新地址内置在代码里，界面上没有任何地方能改。
@@ -4393,6 +4580,16 @@ document.getElementById("btnSim").onclick = ()=>{
     else { renderSim(res); btn.textContent = "模拟走狼"; }
   }, 30);
 };
+/* 动画播放中可以随时暂停 / 继续 */
+document.getElementById("btnPause").onclick = ()=>{
+  const P = playback;
+  if(!P) return;
+  P.paused = !P.paused;
+  P.last = performance.now();
+  document.getElementById("btnPause").textContent = P.paused ? "继续" : "暂停";
+  setHint(P.paused ? ("已暂停（走狼动画 "+P.t.toFixed(1)+" 秒处），点「继续」接着放")
+                   : "继续播放走狼动画");
+};
 document.getElementById("btnHelp").onclick = ()=>{
   alert(
     "使用步骤\n"+
@@ -4406,6 +4603,13 @@ document.getElementById("btnHelp").onclick = ()=>{
     "5. 打开「攻击范围」可以看到每座塔的射程（颜色=所镶宝石颜色，虚线=被织女雕像加成后的射程）。\n"+
     "6. 右侧「模拟出狼」可以按本图的狼、进度、波难度随机抽一波，并算出每只狼的血量。\n"+
     "7. 布好后点「生成种子码」，把代码发给别人；别人粘贴后点「载入种子码」就能看到同样的布阵。\n\n"+
+    "动画\n"+
+    "· 播放中随时可以「暂停 / 继续」，慢慢看某一只狼走了哪条路。\n"+
+    "· 狼放技能时名字下面会显示技能名（被动技能不显示）。\n"+
+    "· 关底 Boss 波里只有百科点名的关底 BOSS 是红色三角；随机 Boss 也是红色三角。\n\n"+
+    "存档\n"+
+    "· 布阵存在这台电脑的浏览器本地存储里（键名 yangcun-buzhen-v1），不在工具文件夹的文件里。\n"+
+    "· 「种子码」是单张图的；换电脑想把所有图一次搬走，用「导出全部存档 / 导入全部存档」。\n\n"+
     "规则\n"+
     "· 狼按四方向走，不走折线；出狼口顺着箭头方向的第 1 格不能放建筑，所有出狼口一个都不能堵。\n"+
     "· 入村口按箭头方向进村，羊村范围里的其它格子算障碍、不能建塔也不参与路线。\n"+
@@ -4456,6 +4660,8 @@ document.getElementById("tgPath").classList.toggle("on", state.showPath);
 document.getElementById("tgFly").classList.toggle("on", state.showFly);
 document.getElementById("tgRange").classList.toggle("on", state.showRange);
 document.getElementById("tgGrid").classList.toggle("on", state.showGrid);
+document.getElementById("tgSkillTag").classList.toggle("on", state.showSkillTag);
+document.getElementById("tgTowerFx").classList.toggle("on", state.showTowerFx);
 ensureCustomMaps();
 renderChapters();
 renderTowers();
