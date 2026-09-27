@@ -413,7 +413,7 @@
 <script>
 /* ---------------- 版本 / 自动更新 ----------------
    发布新版本时：把这里的版本号 + 同目录的 version.json 一起改成新版本号再上传即可。 */
-window.YC_LOCAL_VERSION = "1.5.4.1";
+window.YC_LOCAL_VERSION = "1.5.4.2";
 /* 版本号比较：1.10 > 1.9 */
 window.YC_NEWER = function(a, b){
   var pa = String(a).split("."), pb = String(b).split(".");
@@ -490,7 +490,8 @@ const state = {
 const COLOR_DEFAULT = { path:"#ffee58", fly:"#63d2ff" };
 /* 塔给狼的状态字颜色（动画里写在狼名字上方） */
 const FX_COLOR = { "眩晕":"#ffd24d", "击退":"#c07bff", "沉默":"#1b1b1b",
-                   "暴击":"#ffd24d", "燃烧":"#ff5252", "剧毒":"#6ddc6d", "减速":"#6fb8ff" };
+                   "暴击":"#ffd24d", "燃烧":"#ff5252", "胆怯":"#ff5252",
+                   "剧毒":"#6ddc6d", "减速":"#6fb8ff" };
 state.colorPath = (state.data.ui && state.data.ui.colorPath) || COLOR_DEFAULT.path;
 state.colorFly  = (state.data.ui && state.data.ui.colorFly)  || COLOR_DEFAULT.fly;
 /* 动画里要不要显示「技能名」「塔给的状态」：存在存档里，下次打开保持 */
@@ -1959,7 +1960,12 @@ const TICK = 0.04, UNIT = 1 / 1000;
 /* 传送带：格子上箭头方向与狼的前进方向一致就加速、不一致就减速。
    百科只写了「一致加速、反之减速」没给数值，先按 ±10% 设定，之后再按实测调。
    （游戏配置里的 conveyer_speed 是 12，等确认单位后可以换成它） */
-const BELT_GAIN = 0.30;      // 传送带顺行 +30% / 逆行 -30%（按基础速度【累加】到当前速度，见速度计算那一段）
+/* 传送带：游戏里每帧推动 12（游戏内距离，1 格 = 1000），25 帧 = 1 秒。
+   顺行把狼往前带（速度加 12/帧），逆行往回顶（速度减 12/帧）。
+   因为它是固定值、直接累加到当前速度上，所以移速够快（哪怕被冰霜减速）的狼照样能走过去，
+   只有移速很慢的狼再叠上高强度冰霜减速时，速度才会被顶成负数、被带子倒推。 */
+const BELT_SPEED = 12;
+const BELT_GAIN = BELT_SPEED * UNIT * 25;   // 换算成脚本里的速度单位（格/秒）：0.3 格/秒
 const BELT_DIR_VEC = {right:[0,1], left:[0,-1], up:[-1,0], down:[1,0]};
 /* 爆炸箱爆炸：百科只写了「推 4 次会爆炸」，数值按自爆狼的效果和时间来
    （自爆狼 Burst_Z1 = [2000, 2]：范围 2 格、塔被乌云罩住 2 秒；
@@ -1971,7 +1977,8 @@ const SPRING_AIR_TIME = 0.5;   // 踩到弹簧但没被弹到落点时，腾空 
 let TOWER_RATE_MUL = 1.5;
 /* 紫镶嵌闪电弹射的最远传递距离：游戏代码 BounceAttackSkill.MAX_DISTANCE = 3000（3 格） */
 const CHAIN_MAX_DIST = 3.0;
-const SIM_MAX_T = 240;        // 一次模拟最多跑 4 分钟（够狼走完全程；分身多了也不会算到超时）
+const SIM_MAX_T = 480;        // 一次模拟最多跑 8 分钟（够狼走完全程；分身多了也不会算到超时）
+const AIR_DROP_TICKS = 100;   // 「空降」的狼从空中落到地面要 100 帧（25 帧 = 1 秒，即 4 秒）
 const MAX_WOLVES = 150;       // 场上的狼上限（召唤 / 分身 / 转生都受这个限制）
 const CAST_KINDS = {summon:1, cloud:1, massTreatment:1, shield:1, morph:1};   // 有前摇、能被打断的技能
 /* 例外：装甲运狼车（哪怕它是随机 Boss）倒地转生出来的 4 只小突袭狼是普通狼，
@@ -2385,11 +2392,11 @@ function towerCombat(b){
     gemName: g.name,
   };
 }
-/* 踩弹簧腾空的那 0.5 秒里，陆狼也算「飞狼」：
+/* 踩弹簧腾空的那 0.5 秒、以及「空降」的狼刚落地前那 4 秒，陆狼也算「飞狼」：
    散弹塔的双倍伤害与效果照算，炮塔 / 波动塔索敌不到（游戏实测） */
 function isAir(w, t){
   if(w.fly) return true;
-  return (w.airT || -1) > t;
+  return (w.airT || -1) > t || (w.airDropUntil || -1) > t;
 }
 function canHitAir(T, w, t){ return !isAir(w, t) || T.canAir; }
 function wolfPoint(w){
@@ -2496,7 +2503,8 @@ function simulateWalk(){
   /* 特殊地形的周期爆发（数值来自百科「前线、防线地图」页 + 游戏配置 barrier）：
        · 小火山 2x2：7 秒一喷 — 熔岩影响周围一格：对狼造成其血量 2% 的燃烧伤害（至多 5000），把塔封 4 秒
        · 大火山 3x3：10 秒一喷 — 对狼 4% 的燃烧伤害（至多 10000），把塔封 6 秒
-       · 反应炉：10 秒一喷 — 对狼减速 2 秒（50%），对塔减速 6 秒（攻速 ×0.5）
+     · 反应炉：10 秒一喷 — 对范围内的狼上冰霜减速（50%，持续 2 秒，受抗冰减免），
+       对范围内的塔上减速粒子（攻速 ×0.5，持续 6 秒）
        · 核电厂：4 秒一爆 — 周围狼吃 1000 点电伤害（免疫电的除外），范围内塔攻速 ×2 持续 4 秒
      「影响周围一格」按周围 8 格算；燃烧伤害是一次结算（百科只给了总量，没有分段）。 */
   const barriers = [];
@@ -2613,6 +2621,7 @@ function simulateWalk(){
       shield:null, cast:null, linksUntil:0, linksRatio:0, slowf:null, dr:0,
       skills: [], uses:{}, clones:[], expire:0,
       airT: 0,                     // 踩弹簧腾空到什么时候（这期间算飞狼）
+      airDropUntil: 0,             // 「空降」的狼落地时间（这之前算飞狼，动画画蓝三角）
       corridor: null, charm: 0,    // 走的通道 + 这只狼的寻路吸引力（进村/倒地时要把开销还原）
       fixFrom: null, fixTo: null, fixT: 0,   // 转生出来的陆地狼从障碍物之间走回走狼路线
       fx: [],                      // 塔给它的状态（眩晕 / 击退 / 沉默 / 暴击 / 燃烧 / 剧毒 / 减速）
@@ -2713,6 +2722,9 @@ function simulateWalk(){
     if(rec.air){
       const hi = Math.max(0, rec.route.length - 1 - 6);
       rec.pos = Math.floor(Math.random() * (hi + 1));
+      // 刚出现时还在「天上」：100 帧（4 秒）里算飞行单位（蓝三角），落地后才是陆狼（黄三角）。
+      // 寻路本身按陆狼算（起点就是上面这条走狼路线上的那一格）。
+      rec.airDropUntil = spawn + AIR_DROP_TICKS * TICK;
     }
     return rec;
   };
@@ -2791,8 +2803,13 @@ function simulateWalk(){
         const o = mk(id, hp, t, 0, w, false, hp);
         o.boss = w.boss && !NO_BOSS_KIDS.has(w.id);   // Boss 转生后仍是 Boss（装甲运狼车的小突袭狼例外）
         tagPush(o, "转生", 1.5);
-        // 名字提示：一对一转生成陆地形态 →「·陆」；一对多 →「·1」「·2」…
-        o.name = baseName(w.name) + (one && wasAir && !o.fly ? "·陆" : "·" + (k + 1));
+        /* 名字：转生成了另一种狼就用它自己的名字（装甲运狼车 → 4 只小突袭狼、
+           迟盾狼 → 自爆狼/飞天狼/金刚狼）；只有转来转去还是同一个名字（僵尸狼王、
+           珍宝杰克、天空萝莉这类多条命的），才加「·1」「·2」或「·陆」标第几条命。 */
+        const tname = wolfName(id);
+        o.name = (tname !== baseName(w.name))
+          ? tname
+          : baseName(w.name) + (one && wasAir && !o.fly ? "·陆" : "·" + (k + 1));
         // 天空萝莉这类：本体在天上，转生出来的是陆地狼，落点在障碍物 / 建筑之间时，
         // 先按本体移速走回正常的走狼路线再继续（游戏里是对它 jostle）
         if(wasAir && !o.fly && o.route.length > 1) o.fixFrom = dp;
@@ -3020,6 +3037,8 @@ function simulateWalk(){
       if(w.stunT > 0){ w.stunT -= TICK; active++; continue; }        // 被眩晕：原地不动
       if(w.tauntUntil > t){ active++; continue; }                    // 嘲讽中：停下来顶着
       if(w.cast){ active++; continue; }                              // 施法中：定住不动，直到技能放完
+      // 空降的狼：从天上落下来这 100 帧原地不动，完全变成陆狼之后才开始走
+      if((w.airDropUntil || 0) > t){ active++; continue; }
       if(w.backT > 0){                                               // 胆怯：往回走
         w.backT -= TICK;
         w.pos = Math.max(0, w.pos - w.speed*TICK*0.8);
@@ -3028,12 +3047,12 @@ function simulateWalk(){
         // 笔记里的速度计算最后有一句 max(1, …)：速度有下限（1 单位/帧），
         // 所以「怕冰」的狼被冰到 100% 以上时是几乎不动，而不是彻底停死
         const minSpeed = UNIT * 25;
-        /* 传送带：箭头和狼的前进方向一致 ＝ 加速，不一致 ＝ 减速（百科）。
-           注意这里按「基础速度的百分比」【累加】到当前速度上，而不是像冰霜减速那样乘算：
-           所以被冰得够狠的狼踩在逆行带上，速度会算成负数 —— 那就会真的往后退。
-           只有逆行传送带能造成这种后退（冰霜减速是乘算，永远不会变成负数）。 */
+        /* 传送带：箭头和狼的前进方向一致 ＝ 往前带（+12/帧），不一致 ＝ 往回顶（-12/帧）。
+           它是游戏里固定值、直接【累加】到当前速度上（不像冰霜减速那样乘算），
+           所以速度够快的狼就算被冰减速也还是能走过去；只有移速很慢的狼叠上高强度冰减速时，
+           速度才会被顶成负数 —— 那种情况下才会被逆行带倒推着往后退。 */
         let beltAdd = 0;
-        if(!w.fly && m.belt){
+        if(!isAir(w, t) && m.belt){
           const i0 = Math.min(Math.floor(w.pos), w.route.length-1);
           const cell = w.route[i0], nxt = w.route[Math.min(i0+1, w.route.length-1)];
           const dir = m.belt[cell[0]+"_"+cell[1]];
@@ -3044,7 +3063,7 @@ function simulateWalk(){
             if(same) belt.fast++; else belt.slow++;
           }
         }
-        const speedNow = w.speed * slowFactor * run + w.speed * beltAdd;
+        const speedNow = w.speed * slowFactor * run + beltAdd;
         if(speedNow < 0) w.pos = Math.max(0, w.pos + speedNow * TICK);   // 逆行带把狼推回去
         else w.pos += Math.max(minSpeed, speedNow) * TICK;
       }
@@ -3057,7 +3076,7 @@ function simulateWalk(){
       }
       // 弹簧：轻的狼踩在弹簧格上会被弹到随机的弹簧落点
       // 爆炸箱：狼撞上去 = 狼后退一格 + 箱子被往狼的前进方向推一格；推满 4 次箱子爆炸
-      if(boxes.size && !w.fly){
+      if(boxes.size && !isAir(w, t)){
         const idx = Math.min(Math.floor(w.pos), w.route.length-1);
         const cell = w.route[idx];
         const ck = cell[0] + "_" + cell[1];
@@ -3097,7 +3116,7 @@ function simulateWalk(){
           w.kb = Math.max(1, (w.speed || 0.5) * 0.5);
         }
       }
-      if(springCells.size && !w.fly){
+      if(springCells.size && !isAir(w, t)){
         const cell = w.route[Math.min(Math.floor(w.pos), w.route.length-1)];
         const ck = cell[0] + "_" + cell[1];
         const st = springState[ck] || (springState[ck] = {t:-99, n:0});
@@ -3142,6 +3161,8 @@ function simulateWalk(){
       // 被减速粒子（被动光环）影响的塔：画一层淡蓝色，但仍能看到塔本身
       const slowed = towers.filter(T=>{
         if(T.cloudT > t) return false;
+        // 反应炉波及的塔也算「减速粒子」效果（攻速被压住的塔，动画里同样叠一层淡蓝）
+        if((T.rateBuffs || []).some(b=>b.until > t && b.mul < 1)) return true;
         return auras.some(w=>{
           const p = wolfPoint(w);
           return Math.hypot(T.r+0.5-p[0], T.c+0.5-p[1]) <= w.slowf.r;
@@ -3160,7 +3181,7 @@ function simulateWalk(){
         if(t < w.spawn) return null;            // 还没出狼口的狼不要堆在出口那一格上
         const p = wolfPoint(w);
         // r/c 就是地图的行列，和走狼路线用的是同一套坐标
-        return { k:wi, r:p[0], c:p[1], name:w.name, fly:!!w.fly, hp:Math.max(0,Math.round(w.hp)),
+        return { k:wi, r:p[0], c:p[1], name:w.name, fly:isAir(w, t), hp:Math.max(0,Math.round(w.hp)),
                  hide: w.hideUntil > t || inPyramid(m, w), silence: w.silenceT > 0, boss: !!w.boss,
                  skill: tagText(w.skillTags) || null,
                  fx: tagText(w.fx) || null };
@@ -3253,7 +3274,10 @@ function simulateWalk(){
           interrupt(w);                                   // 眩晕：强制打断非瞬发技能
           fxPush(w, "眩晕", T.vertigo.dur);
         }
-        if(T.timid && Math.random() < T.timid.chance*NER){ w.backT = T.timid.dur; interrupt(w); }
+        if(T.timid && Math.random() < T.timid.chance*NER){
+          w.backT = T.timid.dur; interrupt(w);
+          fxPush(w, "胆怯", T.timid.dur);
+        }
         if(T.knock && Math.random() < T.knock*NER*Math.max(0, 1 - (res.beat || 0))){
           w.pos = Math.max(0, w.pos - 1);
           interrupt(w);                                   // 超长距离击退：打断非瞬发技能
@@ -3336,10 +3360,16 @@ function simulateWalk(){
           });
           towers.forEach(T=>{ if(inRing([T.r+0.5, T.c+0.5])){ T.cloudT = Math.max(T.cloudT, t + cloud); terrain.towers++; } });
         }else if(g.kind === "反应炉"){
+          /* 反应炉爆发：对范围内的狼上「冰霜减速」（和蓝宝石同一种状态，会被抗冰减免），
+             对范围内的塔上「减速粒子」（攻速减半 6 秒）。 */
           wolves.forEach(w=>{
             if(w.done || t < w.spawn || !inRing(wolfPoint(w))) return;
-            w.slow = Math.max(w.slow, 0.5);            // 化工物减速 50%，持续 2 秒
+            const slow = 0.5 * Math.max(0, 1 - (w.res.frost || 0));   // 抗冰会减免这次减速
+            if(slow <= 0) return;
+            w.slow = Math.max(w.slow, slow);
             w.slowT = Math.max(w.slowT, 2);
+            w.slowTier = Math.max(w.slowTier || 0, 1);                // 标记成冰霜减速，别被燃烧顶掉
+            fxPush(w, "减速", 2);
             terrain.wolves++;
           });
           towers.forEach(T=>{ if(inRing([T.r+0.5, T.c+0.5])){ T.rateBuffs.push({until: t+6, mul: 0.5}); terrain.towers++; } });
