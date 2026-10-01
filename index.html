@@ -267,10 +267,10 @@
     </div>
     <div class="slider" style="margin-top:6px">
       <span class="note">本图塔攻速倍率</span>
-      <input type="range" id="rateMul" min="0.1" max="2" step="0.05" value="2">
-      <input type="number" id="rateMulNum" min="0.1" max="2" step="0.05" value="2" style="width:66px">
+      <input type="range" id="rateMul" min="0.1" max="2" step="0.05" value="1">
+      <input type="number" id="rateMulNum" min="0.1" max="2" step="0.05" value="1" style="width:66px">
     </div>
-    <div class="note">只影响「模拟走狼」里塔的出手速度（1 = 完全按面板数值，最大 2、最小 0.1）。</div>
+    <div class="note">临时校准用：只影响本次「模拟走狼」里塔的出手速度，不会存进存档（默认 1 = 完全按面板数值，最大 2、最小 0.1）。</div>
     <div class="slider" style="margin-top:4px">
       <span class="note">画布缩放</span>
       <input type="range" id="zoom" min="60" max="260" value="100">
@@ -414,7 +414,7 @@
 <script>
 /* ---------------- 版本 / 自动更新 ----------------
    发布新版本时：把这里的版本号 + 同目录的 version.json 一起改成新版本号再上传即可。 */
-window.YC_LOCAL_VERSION = "1.6";
+window.YC_LOCAL_VERSION = "1.6.1";
 /* 版本号比较：1.10 > 1.9 */
 window.YC_NEWER = function(a, b){
   var pa = String(a).split("."), pb = String(b).split(".");
@@ -1998,9 +1998,9 @@ const BELT_DIR_VEC = {right:[0,1], left:[0,-1], up:[-1,0], down:[1,0]};
     自爆狼王 Burst_Z4 = [3000, 8] 是范围 3 格、8 秒） */
 const BOX_BLAST_RANGE = 2, BOX_BLAST_CLOUD = 2;
 const SPRING_AIR_TIME = 0.5;   // 踩到弹簧但没被弹到落点时，腾空 0.5 秒（这期间算飞狼）
-/* 校准系数：把塔的攻速整体乘一个倍数（1 = 完全按面板/百科数值）。
-   用来把模拟结果对齐到游戏实测（尤其是防线的挂机强度）。 */
-let TOWER_RATE_MUL = 1.5;
+/* 出狼间隔以前走的是「1 秒 1 只」的估算法，塔才需要靠这个系数补回来；
+   现在出狼间隔直接按游戏配置 umaps[].interval，塔这边就回归「1 = 完全按面板数值」。 */
+let TOWER_RATE_MUL = 1;
 /* 紫镶嵌闪电弹射的最远传递距离：游戏代码 BounceAttackSkill.MAX_DISTANCE = 3000（3 格） */
 const CHAIN_MAX_DIST = 3.0;
 const SIM_MAX_T = 480;        // 一次模拟最多跑 8 分钟（够狼走完全程；分身多了也不会算到超时）
@@ -2547,7 +2547,7 @@ function simulateWalk(){
   const m = cur();
   const wave = lastWave;
   if(!wave) return {err:"先点「随机生成一波」抽一波狼，再点模拟走狼"};
-  TOWER_RATE_MUL = rateMulOf(m);           // 本图设置的塔攻速倍率
+  TOWER_RATE_MUL = rateMulOf();            // 塔攻速倍率（默认 1 = 完全按面板）
   const routes = shortestPaths(false);
   if(!routes.length) return {err:"当前布阵下狼走不出去（出狼口被堵或路线不通）"};
   const flyRoutes = flyRouteList();                 // 会飞的狼的路线（直飞与走传送阵取更短的，再从等长的几条里随机会挑）
@@ -2924,9 +2924,12 @@ function simulateWalk(){
     for(let i=order.length-1;i>0;i--){ const j = (Math.random()*(i+1))|0; const x = order[i]; order[i] = order[j]; order[j] = x; }
     bossIdx.forEach((bi, k)=>{ bossFrom.set(bi, order[k % order.length]); });
   }
+  /* 出狼间隔：游戏配置 umaps[].interval 是出怪间隔的 tick 数（2000 → 2 秒），
+     第 i 只（从 0 数）在 i×interval/1000 秒出来。 */
+  const spawnGap = (((m.wolf || {}).interval) || 2000) / 1000;
   wave.list.forEach((w, i)=>{
     const hp = w.hp != null ? w.hp : wolfHp(w.id, wave.level, wave.diff);
-    const rec = mk(w.id, hp, i, i, null, false, w.hpMax, w.boss, null, bossFrom.get(i));   // 出狼间隔 1 秒 1 只
+    const rec = mk(w.id, hp, i * spawnGap, i, null, false, w.hpMax, w.boss, null, bossFrom.get(i));
     if(w.boss) rec.boss = true;                 // 随机 Boss（动画里画大一圈 + 红虚线）
     wolves.push(rec);
   });
@@ -4141,7 +4144,7 @@ function selectMap(i){
   state.chapter = m.chapter;
   if(m.custom) syncCustomSize(m);
   state.align = rec(m).align || {x:0,y:0,s:100};
-  const rm = rateMulOf(m);                 // 本图塔攻速倍率
+  const rm = rateMulOf();                  // 塔攻速倍率（临时旋钮，默认 1）
   document.getElementById("rateMul").value = rm;
   document.getElementById("rateMulNum").value = rm;
   document.getElementById("alX").value = state.align.x;
@@ -4542,15 +4545,17 @@ document.getElementById("tgRange").onclick = e=>{ state.showRange=!state.showRan
 document.getElementById("tgGrid").onclick = e=>{ state.showGrid=!state.showGrid; e.target.classList.toggle("on",state.showGrid); draw(); };
 document.getElementById("rangeAlpha").oninput = e=>{ state.rangeAlpha = +e.target.value/100; draw(); };
 /* 本图塔攻速倍率（0.1~2.0，存在这张图的存档里） */
-function rateMulOf(m){ const r = rec(m||cur()).rateMul; return (r == null) ? 2 : r; }
+/* 1 = 完全按面板数值（出狼间隔改成走游戏配置后，不再需要用倍率去补，
+   所以它降级成「只影响本次模拟」的临时校准旋钮，不写进存档、老存档里存过的倍率也不再生效）。 */
+let rateMulLive = 1;
+function rateMulOf(){ return rateMulLive; }
 function setRateMul(v){
   v = Math.max(0.1, Math.min(2, +v || 1));
   v = Math.round(v*20)/20;
-  rec().rateMul = v;
+  rateMulLive = v;
   document.getElementById("rateMul").value = v;
   document.getElementById("rateMulNum").value = v;
-  save();
-  setHint("本图塔攻速倍率 = " + v + (v === 1 ? "（按面板数值）" : ""));
+  setHint("塔攻速倍率 = " + v + (v === 1 ? "（按面板数值）" : "（只影响本次模拟）"));
 }
 document.getElementById("rateMul").oninput = e=>setRateMul(e.target.value);
 document.getElementById("rateMulNum").oninput = e=>setRateMul(e.target.value);
